@@ -1,3 +1,4 @@
+//C:\Users\Admin\Downloads\DUANWEB(1)\server\routes\userRoutes.js
 const express = require('express');
 const router = express.Router();
 
@@ -34,7 +35,7 @@ router.get('/admin/users', verifyToken, userController.listUsers);
 router.post('/users/create', verifyToken, userController.createUser);
 
 // 5. Admin/Staff Reset Mật khẩu cho người khác
-router.post('/admin/reset-password', verifyToken, userController.adminResetPassword);
+router.put('/admin/users/:id/reset-password', verifyToken, userController.adminResetPassword);
 
 // 6. Cập nhật trạng thái (Active/Locked)
 // URL: /api/admin/users/:id/status

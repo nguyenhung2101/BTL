@@ -132,7 +132,7 @@ const authController = {
     // ============================================================
     // 3. ĐỔI MẬT KHẨU (CHỦ ĐỘNG) - Mã hóa & Thoát vòng lặp
     // ============================================================
-    changePassword: async (req, res) => {
+   changePassword: async (req, res) => {
         const { userId, oldPassword, newPassword } = req.body;
         
         if (!userId || !oldPassword || !newPassword) {
@@ -140,10 +140,14 @@ const authController = {
         }
 
         try {
-            const user = await userModel.findById(userId);
-            if (!user) return res.status(404).json({ message: 'Người dùng không tồn tại.' });
+            // 1. Lấy thông tin User
+            // (Nếu bạn dùng userModel thì ok, nhưng tôi viết query trực tiếp để chắc chắn chạy)
+            const [users] = await db.query("SELECT * FROM users WHERE user_id = ?", [userId]);
+            const user = users[0];
 
-            // Kiểm tra mật khẩu cũ (Hỗ trợ cả mã hóa và không mã hóa)
+            if (!user) return res.status(404).json({ message: 'User không tồn tại.' });
+
+            // 2. Kiểm tra mật khẩu cũ
             let isMatch = false;
             if (user.password_hash.startsWith('$2b$') || user.password_hash.startsWith('$2a$')) {
                 isMatch = await bcrypt.compare(oldPassword, user.password_hash);
@@ -155,54 +159,62 @@ const authController = {
                 return res.status(400).json({ message: 'Mật khẩu cũ không chính xác.' });
             }
 
-            // 🟢 Mã hóa mật khẩu mới
+            // 3. Mã hóa mật khẩu mới
             const salt = await bcrypt.genSalt(10);
-            const hashedNewPassword = await bcrypt.hash(newPassword, salt);
+            const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-            // 🟢 Gọi Model (2 tham số) -> Model sẽ tự set must_change = 0
-            await userModel.updatePassword(userId, hashedNewPassword); 
-            
-            res.status(200).json({ message: 'Đổi mật khẩu thành công.' });
+            // 🟢 [CỰC KỲ QUAN TRỌNG] 
+            // Cập nhật pass MỚI + Set must_change_password = 0 (FALSE)
+            await db.query(
+                `UPDATE users 
+                 SET password_hash = ?, 
+                     must_change_password = 0, 
+                     token_version = COALESCE(token_version, 0) + 1 
+                 WHERE user_id = ?`, 
+                [hashedPassword, userId]
+            );
+
+            res.status(200).json({ message: 'Đổi mật khẩu thành công!' });
 
         } catch (error) {
-            console.error(error);
-            res.status(500).json({ message: 'Lỗi server.' });
+            console.error("Change Pass Error:", error);
+            res.status(500).json({ message: 'Lỗi server' });
         }
     },
 
     // ============================================================
     // 4. ADMIN RESET MẬT KHẨU (Force Logout & Fix Tràn Số)
     // ============================================================
-    resetPassword: async (req, res) => {
+   resetPassword: async (req, res) => {
+        const { userId, newPassword } = req.body;
+
+        if (!userId || !newPassword) {
+            return res.status(400).json({ message: 'Thiếu thông tin.' });
+        }
+
         try {
-            const userId = req.body.userId || req.body.user_id || req.body.targetUserId;
-            const newPassword = req.body.newPassword || req.body.password;
-
-            if (!userId || !newPassword) {
-                return res.status(400).json({ message: 'Thiếu ID người dùng hoặc mật khẩu mới.' });
-            }
-
-            // 🟢 Mã hóa
+            // 1. Mã hóa mật khẩu mới
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-            // 🟢 Truyền null để tránh lỗi tràn số
-            const newTokenVersion = null; 
+            // 2. [QUAN TRỌNG NHẤT]: Set must_change_password = 0 (False)
+            // Để hệ thống biết user đã đổi xong rồi, không bắt đổi nữa.
+            await db.query(
+                `UPDATE users 
+                 SET password_hash = ?, 
+                     must_change_password = 0, 
+                     token_version = COALESCE(token_version, 0) + 1 
+                 WHERE user_id = ?`, 
+                [hashedPassword, userId]
+            );
 
-            const result = await userModel.adminResetPassword(userId, hashedPassword, newTokenVersion);
-
-            if (result.affectedRows === 0) {
-                return res.status(404).json({ message: 'Không tìm thấy người dùng.' });
-            }
-
-            res.status(200).json({ message: 'Cấp lại mật khẩu thành công. User đã bị đăng xuất khỏi thiết bị cũ.' });
+            res.status(200).json({ message: 'Đặt lại mật khẩu thành công!' });
 
         } catch (error) {
-            console.error("Reset Password Error:", error);
-            res.status(500).json({ message: 'Lỗi server khi reset mật khẩu.' });
+            console.error("User Reset Password Error:", error);
+            res.status(500).json({ message: 'Lỗi server.' });
         }
     },
-
     // ============================================================
     // 5. ADMIN KHÓA / MỞ KHÓA TÀI KHOẢN (Force Logout & Fix Tràn Số)
     // ============================================================

@@ -1,3 +1,4 @@
+//C:\Users\Admin\Downloads\DUANWEB(1)\client\src\pages\ResetPasswordScreen.js
 import React, { useState } from 'react';
 import { Eye, EyeOff, CheckCircle, Lock } from 'lucide-react';
 import { resetPassword } from '../services/api'; 

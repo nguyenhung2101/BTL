@@ -1,3 +1,4 @@
+//C:\Users\Admin\Downloads\DUANWEB(1)\client\src\services\api.js
 import axios from 'axios';
 
 // [DEBUG] Nếu bạn thấy dòng này trong Console (F12) nghĩa là file MỚI đã chạy
@@ -139,16 +140,33 @@ export const getUsers = async () => {
 };
 
 export const adminResetPassword = async (targetUserId, newPassword) => {
-    // 1. URL phải có /users (do index.js mount vào /api/users)
-    // 2. URL phải có /admin/reset-password (do userRoutes.js định nghĩa)
-    // 3. Phương thức là POST
-    const response = await api.post('/users/admin/reset-password', { 
-        targetUserId: targetUserId, 
-        newPassword: newPassword 
-    });
+    // [FIX LỖI] 
+    // 1. Đổi phương thức từ POST -> PUT (Thường update dữ liệu dùng PUT)
+    // 2. Đưa ID lên URL để Backend dễ nhận diện (giống hàm adminUpdateUserStatus bên dưới)
+    // 3. Đổi key gửi đi: 'newPassword' (Backend phải đọc req.body.newPassword)
+    
+    // Giả định Route Backend của bạn là: PUT /api/admin/users/:id/reset-password
+    // Nếu hàm này vẫn lỗi 404, hãy thử đổi URL thành: '/users/admin/reset-password' nhưng thêm userId vào body
+    
+    try {
+        const response = await api.put(`/admin/users/${targetUserId}/reset-password`, { 
+            newPassword: newPassword 
+        });
 
-    if (response.status !== 200) throw response.data;
-    return response.data;
+        return response.data;
+    } catch (error) {
+        // Nếu cách trên lỗi 404 (do Backend chưa viết chuẩn REST), 
+        // hãy mở comment dùng cách cũ này nhưng SỬA LẠI KEY 'userId':
+        /*
+        const response = await api.post('/users/admin/reset-password', { 
+            userId: targetUserId, // <--- Backend thường tìm biến 'userId' hoặc 'id', ít khi dùng 'targetUserId'
+            newPassword: newPassword 
+        });
+        return response.data;
+        */
+       
+        throw error.response?.data || { message: 'Lỗi reset mật khẩu.' };
+    }
 };
 
 export const adminUpdateUserStatus = async (userId, status) => {

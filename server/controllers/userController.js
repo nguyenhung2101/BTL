@@ -1,22 +1,23 @@
 const userModel = require('../models/userModel');
 const db = require('../config/db.config');
-const bcrypt = require('bcrypt'); // [BỔ SUNG QUAN TRỌNG]
+const bcrypt = require('bcrypt'); // [QUAN TRỌNG: Để mã hóa mật khẩu]
 
 const userController = {
     // ============================================================
-    // 1. LẤY DANH SÁCH USER (Cho Admin)
+    // 1. LẤY DANH SÁCH USER (Cho Admin/Owner)
     // ============================================================
     listUsers: async (req, res) => {
         try {
             const users = await userModel.getAllUsers();
             res.status(200).json(users);
         } catch (error) {
-            res.status(500).json({ message: 'Lỗi khi lấy danh sách nhân viên.' });
+            console.error("List Users Error:", error);
+            res.status(500).json({ message: 'Lỗi khi lấy danh sách người dùng.' });
         }
     },
 
     // ============================================================
-    // 2. TẠO USER MỚI (Đã thêm hash password)
+    // 2. TẠO USER MỚI (Có Transaction & Hash Password)
     // ============================================================
     createUser: async (req, res) => {
         const requesterRole = req.user ? req.user.roleName : null; 
@@ -26,7 +27,7 @@ const userController = {
             return res.status(400).json({ message: 'Vui lòng điền đầy đủ thông tin.' });
         }
 
-        // Kiểm tra quyền
+        // --- Kiểm tra quyền hạn (Logic giữ nguyên) ---
         if (requesterRole) {
             if (roleName !== 'Customer' && requesterRole !== 'Owner') return res.status(403).json({ message: 'Không đủ quyền.' });
             if (roleName === 'Customer' && !['Owner', 'Sales', 'Online Sales'].includes(requesterRole)) return res.status(403).json({ message: 'Không đủ quyền.' });
@@ -38,26 +39,27 @@ const userController = {
 
         let connection;
         try {
-            // Hash mật khẩu
+            // 1. Mã hóa mật khẩu
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(password, salt);
 
             connection = await db.getConnection();
             await connection.beginTransaction();
 
+            // 2. Kiểm tra trùng lặp
             const [dupUser] = await connection.query("SELECT user_id FROM users WHERE username = ?", [username]);
             if (dupUser.length > 0) { await connection.release(); return res.status(409).json({ message: 'Username đã tồn tại.' }); }
 
             const [dupId] = await connection.query("SELECT user_id FROM users WHERE user_id = ?", [userId]);
             if (dupId.length > 0) { await connection.release(); return res.status(409).json({ message: 'User ID đã tồn tại.' }); }
 
-            // Insert User (Status active, must change pass = true)
+            // 3. Insert User (Mặc định Active, và phải đổi mật khẩu lần đầu)
             await connection.query(
                 "INSERT INTO users (user_id, username, password_hash, role_id, status, must_change_password) VALUES (?, ?, ?, ?, 'Active', TRUE)",
                 [userId, username, hashedPassword, roleId]
             );
 
-            // Insert Profile
+            // 4. Insert Profile (Customer hoặc Employee)
             if (roleName === 'Customer') {
                 await connection.query("INSERT INTO customers (customer_id, user_id, full_name, phone, email) VALUES (?, ?, ?, ?, ?)", [userId, userId, fullName, phone, email || null]);
             } else if (roleName !== 'Owner') {
@@ -72,34 +74,35 @@ const userController = {
         } catch (error) {
             if (connection) { await connection.rollback(); connection.release(); }
             console.error("Create User Error:", error);
-            res.status(500).json({ message: 'Lỗi hệ thống.' });
+            res.status(500).json({ message: 'Lỗi hệ thống khi tạo tài khoản.' });
         }
     },
 
     // ============================================================
     // 3. ADMIN RESET MẬT KHẨU (Force Logout)
     // ============================================================
- adminResetPassword: async (req, res) => {
-        const targetUserId = req.body.targetUserId || req.body.userId; 
+    adminResetPassword: async (req, res) => {
+        // [QUAN TRỌNG]: Lấy ID từ URL params để khớp với Router PUT /:id/reset-password
+        const targetUserId = req.params.id; 
         const { newPassword } = req.body;
         
-        if (!targetUserId || !newPassword) return res.status(400).json({ message: 'Thiếu thông tin.' });
+        if (!targetUserId || !newPassword) return res.status(400).json({ message: 'Thiếu thông tin ID hoặc mật khẩu mới.' });
 
         try {
-            // 🟢 MÃ HÓA MẬT KHẨU MỚI
+            // 1. Mã hóa mật khẩu mới
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-            // 🟢 Dùng null để tránh lỗi tràn số (Model sẽ tự +1)
+            // 2. Token Version = null (Model sẽ tự xử lý hoặc +1) để User bị đăng xuất
             const newTokenVersion = null; 
 
-            // Gọi model để lưu mật khẩu mã hóa
+            // 3. Gọi Model
             await userModel.adminResetPassword(targetUserId, hashedPassword, newTokenVersion);
             
-            res.status(200).json({ message: 'Đổi mật khẩu thành công. User sẽ bị đăng xuất.' });
+            res.status(200).json({ message: 'Reset mật khẩu thành công. User sẽ bị đăng xuất khỏi các thiết bị.' });
         } catch (error) {
             console.error("Reset Pass Error:", error);
-            res.status(500).json({ message: 'Lỗi hệ thống.' });
+            res.status(500).json({ message: 'Lỗi hệ thống khi reset mật khẩu.' });
         }
     },
 
@@ -107,11 +110,12 @@ const userController = {
     // 4. ADMIN CẬP NHẬT TRẠNG THÁI (Khóa/Mở)
     // ============================================================
     updateUserStatus: async (req, res) => {
-        const userId = req.params.id; 
+        const userId = req.params.id; // Lấy ID từ URL
         const { status } = req.body; 
 
         if (!userId || !status) return res.status(400).json({ message: 'Thiếu thông tin.' });
 
+        // Chuẩn hóa trạng thái
         const s = status.toString().toLowerCase();
         let dbStatus = status;
         if (s === 'hoạt động') dbStatus = 'Active';
@@ -120,21 +124,22 @@ const userController = {
         if (dbStatus !== 'Active' && dbStatus !== 'Locked') return res.status(400).json({ message: 'Trạng thái không hợp lệ.' });
 
         try {
-            // 🟢 [SỬA LỖI] Dùng null để tránh lỗi tràn số (Model sẽ tự +1)
-            const newTokenVersion = null;
+            const newTokenVersion = null; // Force logout nếu cần (tùy logic model)
 
             await userModel.updateStatus(userId, dbStatus, newTokenVersion);
             res.status(200).json({ message: `Đã cập nhật trạng thái thành ${dbStatus}` });
         } catch (error) {
             console.error("Update Status Error:", error);
-            res.status(500).json({ message: 'Lỗi hệ thống.' });
+            res.status(500).json({ message: 'Lỗi hệ thống khi cập nhật trạng thái.' });
         }
     },
 
-    
+    // ============================================================
+    // 5. LẤY HỒ SƠ CÁ NHÂN (Profile)
+    // ============================================================
     getUserProfile: async (req, res) => {
         try {
-            // Lấy ID từ Token (đã qua middleware verifyToken)
+            // Lấy ID từ Token (req.user do middleware decode ra)
             const userId = req.user.userId || req.user.id; 
             
             const user = await userModel.getProfileById(userId);
@@ -143,7 +148,6 @@ const userController = {
                 return res.status(404).json({ message: 'Không tìm thấy thông tin người dùng.' });
             }
             
-            // Trả về dữ liệu sạch
             res.status(200).json(user);
         } catch (error) {
             console.error("Get Profile Error:", error);
@@ -152,15 +156,15 @@ const userController = {
     },
 
     // ============================================================
-    // UPDATE PROFILE (Cập nhật thông tin)
+    // 6. CẬP NHẬT HỒ SƠ CÁ NHÂN
     // ============================================================
     updateUserProfile: async (req, res) => {
         try {
             const userId = req.user.userId || req.user.id;
-            const roleName = req.user.roleName; // Lấy role để biết update bảng nào
+            const roleName = req.user.roleName; 
             const { full_name, phone, address, date_of_birth } = req.body;
 
-            // Xử lý ngày tháng: Nếu rỗng thì gửi null để tránh lỗi SQL Incorrect Date
+            // Xử lý ngày tháng null
             const dobValue = date_of_birth ? date_of_birth : null;
 
             const data = { 
@@ -171,20 +175,17 @@ const userController = {
             };
 
             let result;
-            
-            // Danh sách các vai trò là Nhân viên (để update bảng employees)
             const employeeRoles = ['Owner', 'Store Manager', 'Sales Staff', 'Warehouse Staff', 'Shipper'];
             
+            // Phân loại update vào bảng nào
             if (employeeRoles.includes(roleName)) {
-                // Update bảng EMPLOYEES
                 result = await userModel.updateEmployeeProfile(userId, data);
             } else {
-                // Mặc định còn lại là CUSTOMERS
                 result = await userModel.updateCustomerProfile(userId, data);
             }
 
-            if (result.affectedRows === 0) {
-                // Trường hợp này xảy ra nếu ID không khớp hoặc dữ liệu mới y hệt dữ liệu cũ
+            // Kiểm tra kết quả
+            if (result && result.affectedRows === 0) {
                 return res.status(200).json({ message: 'Đã lưu (Không có thay đổi nào được thực hiện).' });
             }
 

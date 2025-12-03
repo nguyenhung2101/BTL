@@ -1,3 +1,4 @@
+//C:\Users\Admin\Downloads\DUANWEB(1)\client\src\pages\ChangePasswordScreen.js
 import React, { useState } from 'react';
 import { Eye, EyeOff, ArrowLeft, Lock, LogOut } from 'lucide-react'; 
 import { updatePassword } from '../services/api'; 
