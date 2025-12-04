@@ -26,7 +26,7 @@ CREATE TABLE `users` (
   
   `token_version` INT DEFAULT 0,       -- Cột mới để quản lý đăng xuất
   `status` ENUM('Active', 'Inactive', 'Locked', 'Hoạt động', 'Đã khóa') NOT NULL DEFAULT 'Active',
-  `must_change_password` BOOLEAN NOT NULL DEFAULT TRUE,
+  `must_change_password` BOOLEAN NOT NULL DEFAULT FALSE,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (`role_id`) REFERENCES `roles`(`role_id`) ON DELETE RESTRICT
@@ -196,6 +196,24 @@ CREATE TABLE IF NOT EXISTS `stock_in_details` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;
+-- ------------------------------------------------------------------
+-- Migration: Disable forced password change globally
+-- This block makes `must_change_password` default to FALSE for new users
+-- and clears the flag for existing users.
+-- Run this on an existing database to remove forced-change behaviour.
+-- ------------------------------------------------------------------
+SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS;
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- Ensure column has default FALSE (non-destructive)
+ALTER TABLE `users`
+  MODIFY `must_change_password` BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Clear flag for all existing users (0 = FALSE)
+UPDATE `users` SET `must_change_password` = 0 WHERE `must_change_password` <> 0;
+
+SET FOREIGN_KEY_CHECKS = @OLD_FOREIGN_KEY_CHECKS;
+-- End migration block
 
 -- Dữ liệu mẫu tối thiểu cho roles
 INSERT IGNORE INTO `roles` (`role_id`, `role_name`, `prefix`, `description`) VALUES
@@ -211,23 +229,23 @@ INSERT IGNORE INTO `roles` (`role_id`, `role_name`, `prefix`, `description`) VAL
 
 -- Owner
 INSERT IGNORE INTO `users` (`user_id`, `username`, `password_hash`, `role_id`, `status`, `must_change_password`) VALUES
-('OWNER', 'OWNER', 'OWNER', 1, 'Active', TRUE);
+('OWNER', 'OWNER', 'OWNER', 1, 'Active', FALSE);
 
 -- Customers
 INSERT IGNORE INTO `users` (`user_id`, `username`, `password_hash`, `role_id`, `status`, `must_change_password`) VALUES
-('CUS1', '0900000001', '0900000001', 2, 'Active', TRUE),
-('CUS2', '0900000002', '0900000002', 2, 'Active', TRUE),
-('CUS3', '0900000003', '0900000003', 2, 'Active', TRUE),
-('CUS4', '0900000004', '0900000004', 2, 'Active', TRUE),
-('CUS5', '0900000005', '0900000005', 2, 'Active', TRUE),
-('CUS6', '0900000006', '0900000006', 2, 'Active', TRUE),
-('CUS7', '0900000007', '0900000007', 2, 'Active', TRUE),
-('CUS8', '0900000008', '0900000008', 2, 'Active', TRUE),
-('CUS9', '0900000009', '0900000009', 2, 'Active', TRUE),
-('CUS10', '0900000010', '0900000010', 2, 'Active', TRUE),
-('CUS11', '0900000011', '0900000011', 2, 'Active', TRUE),
-('CUS12', '0900000012', '0900000012', 2, 'Active', TRUE),
-('CUS13', '0900000013', '0900000013', 2, 'Active', TRUE),
+('CUS1', '0900000001', '0900000001', 2, 'Active', FALSE),
+('CUS2', '0900000002', '0900000002', 2, 'Active', FALSE),
+('CUS3', '0900000003', '0900000003', 2, 'Active', FALSE),
+('CUS4', '0900000004', '0900000004', 2, 'Active', FALSE),
+('CUS5', '0900000005', '0900000005', 2, 'Active', FALSE),
+('CUS6', '0900000006', '0900000006', 2, 'Active', FALSE),
+('CUS7', '0900000007', '0900000007', 2, 'Active', FALSE),
+('CUS8', '0900000008', '0900000008', 2, 'Active', FALSE),
+('CUS9', '0900000009', '0900000009', 2, 'Active', FALSE),
+('CUS10', '0900000010', '0900000010', 2, 'Active', FALSE),
+('CUS11', '0900000011', '0900000011', 2, 'Active', FALSE),
+('CUS12', '0900000012', '0900000012', 2, 'Active', FALSE),
+('CUS13', '0900000013', '0900000013', 2, 'Active', FALSE),
 ('CUS14', '0900000014', '0900000014', 2, 'Active', TRUE),
 ('CUS15', '0900000015', '0900000015', 2, 'Active', TRUE),
 ('CUS16', '0900000016', '0900000016', 2, 'Active', TRUE),
@@ -409,36 +427,37 @@ INSERT IGNORE INTO `users` (`user_id`, `username`, `password_hash`, `role_id`, `
 ('CUS192', '0900000192', '0900000192', 2, 'Active', TRUE),
 ('CUS193', '0900000193', '0900000193', 2, 'Active', TRUE),
 ('CUS194', '0900000194', '0900000194', 2, 'Active', TRUE),
-('CUS195', '0900000195', '0900000195', 2, 'Active', TRUE),
-('CUS196', '0900000196', '0900000196', 2, 'Active', TRUE),
-('CUS197', '0900000197', '0900000197', 2, 'Active', TRUE),
-('CUS198', '0900000198', '0900000198', 2, 'Active', TRUE),
-('CUS199', '0900000199', '0900000199', 2, 'Active', TRUE),
-('CUS200', '0900000200', '0900000200', 2, 'Active', TRUE);
+
+('CUS195', '0900000195', '0900000195', 2, 'Active', FALSE),
+('CUS196', '0900000196', '0900000196', 2, 'Active', FALSE),
+('CUS197', '0900000197', '0900000197', 2, 'Active', FALSE),
+('CUS198', '0900000198', '0900000198', 2, 'Active', FALSE),
+('CUS199', '0900000199', '0900000199', 2, 'Active', FALSE),
+('CUS200', '0900000200', '0900000200', 2, 'Active', FALSE);
 
 -- Warehouse
 INSERT IGNORE INTO `users` (`user_id`, `username`, `password_hash`, `role_id`, `status`, `must_change_password`) VALUES
-('WH01', 'WH01', 'WH01', 3, 'Active', TRUE),
-('WH02', 'WH02', 'WH02', 3, 'Active', TRUE),
-('WH03', 'WH03', 'WH03', 3, 'Active', TRUE);
+('WH01', 'WH01', 'WH01', 3, 'Active', FALSE),
+('WH02', 'WH02', 'WH02', 3, 'Active', FALSE),
+('WH03', 'WH03', 'WH03', 3, 'Active', FALSE);
 
 -- Sales
 INSERT IGNORE INTO `users` (`user_id`, `username`, `password_hash`, `role_id`, `status`, `must_change_password`) VALUES
-('SALE1', 'SALE1', 'SALE1', 4, 'Active', TRUE),
-('SALE2', 'SALE2', 'SALE2', 4, 'Active', TRUE),
-('SALE3', 'SALE3', 'SALE3', 4, 'Active', TRUE);
+('SALE1', 'SALE1', 'SALE1', 4, 'Active', FALSE),
+('SALE2', 'SALE2', 'SALE2', 4, 'Active', FALSE),
+('SALE3', 'SALE3', 'SALE3', 4, 'Active', FALSE);
 
 -- Online Sales
 INSERT IGNORE INTO `users` (`user_id`, `username`, `password_hash`, `role_id`, `status`, `must_change_password`) VALUES
-('OS01', 'OS01', 'OS01', 5, 'Active', TRUE),
-('OS02', 'OS02', 'OS02', 5, 'Active', TRUE),
-('OS03', 'OS03', 'OS03', 5, 'Active', TRUE);
+('OS01', 'OS01', 'OS01', 5, 'Active', FALSE),
+('OS02', 'OS02', 'OS02', 5, 'Active', FALSE),
+('OS03', 'OS03', 'OS03', 5, 'Active', FALSE);
 
 -- Shipper
 INSERT IGNORE INTO `users` (`user_id`, `username`, `password_hash`, `role_id`, `status`, `must_change_password`) VALUES
-('SHIP01', 'SHIP01', 'SHIP01', 6, 'Active', TRUE),
-('SHIP02', 'SHIP02', 'SHIP02', 6, 'Active', TRUE),
-('SHIP03', 'SHIP03', 'SHIP03', 6, 'Active', TRUE);
+('SHIP01', 'SHIP01', 'SHIP01', 6, 'Active', FALSE),
+('SHIP02', 'SHIP02', 'SHIP02', 6, 'Active', FALSE),
+('SHIP03', 'SHIP03', 'SHIP03', 6, 'Active', FALSE);
 
 INSERT IGNORE INTO `employees`
 (employee_id, user_id, full_name, email, phone, date_of_birth, address, start_date, employee_type, department, base_salary, commission_rate)
@@ -2074,6 +2093,107 @@ SET SQL_SAFE_UPDATES = 0;
 
 SET SQL_SAFE_UPDATES = 1;
 SET FOREIGN_KEY_CHECKS = 1;
+
+
+
+
+-- ================================================================
+-- MIGRATION: Optional product variant support
+-- Purpose: add `product_variants` table and link existing stock/order details
+-- IMPORTANT: Backup your database before running these statements.
+-- Run on staging first. Some steps are destructive if you drop columns.
+-- ================================================================
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- 1) Create product_variants table (stores per-size/color variants)
+CREATE TABLE IF NOT EXISTS `product_variants` (
+  `variant_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `product_id` VARCHAR(20) NOT NULL,
+  `sku` VARCHAR(64) DEFAULT NULL,
+  `size` VARCHAR(64) DEFAULT NULL,
+  `color` VARCHAR(128) DEFAULT NULL,
+  `price` DECIMAL(18,2) NOT NULL,
+  `cost_price` DECIMAL(18,2) NOT NULL,
+  `stock_quantity` INT NOT NULL DEFAULT 0,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_variant_product (`product_id`),
+  UNIQUE KEY uq_product_variant (`product_id`,`size`,`color`),
+  CONSTRAINT fk_variant_product FOREIGN KEY (`product_id`) REFERENCES `products`(`product_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 2) Create a default variant for every existing product.
+--    This preserves current behavior: a product without explicit variants becomes one default variant.
+INSERT INTO product_variants (product_id, sku, size, color, price, cost_price, stock_quantity)
+SELECT product_id, CONCAT(product_id,'-DEF'), NULL, NULL, price, cost_price, stock_quantity
+FROM products
+ON DUPLICATE KEY UPDATE price=VALUES(price), cost_price=VALUES(cost_price);
+
+-- 3) Add nullable `variant_id` to stock_in_details and order_details to preserve history.
+ALTER TABLE `stock_in_details` 
+  ADD COLUMN `variant_id` BIGINT UNSIGNED NULL AFTER `product_id`;
+
+ALTER TABLE `order_details`
+  ADD COLUMN `variant_id` BIGINT UNSIGNED NULL AFTER `product_id`;
+
+-- 4) Populate `variant_id` for existing stock_in_details and order_details using default variant created above.
+UPDATE `stock_in_details` sid
+JOIN `product_variants` pv ON pv.product_id = sid.product_id
+SET sid.variant_id = pv.variant_id
+WHERE sid.variant_id IS NULL;
+
+UPDATE `order_details` od
+JOIN `product_variants` pv ON pv.product_id = od.product_id
+SET od.variant_id = pv.variant_id
+WHERE od.variant_id IS NULL;
+
+-- 5) If you want variant-level stock to reflect previous product-level `stock_quantity`, we've set default variant stock to products.stock_quantity.
+--    To keep products.stock_quantity consistent with sum of variants, update products.stock_quantity from product_variants.
+UPDATE products p
+JOIN (
+  SELECT product_id, COALESCE(SUM(stock_quantity),0) AS total_qty
+  FROM product_variants
+  GROUP BY product_id
+) pvsum ON pvsum.product_id = p.product_id
+SET p.stock_quantity = pvsum.total_qty;
+
+-- 6) Add foreign keys on variant_id (optional). Use SET NULL to avoid cascade deletion of historical details.
+ALTER TABLE `stock_in_details`
+  ADD CONSTRAINT `fk_stockin_detail_variant` FOREIGN KEY (`variant_id`) REFERENCES `product_variants`(`variant_id`) ON DELETE SET NULL;
+
+ALTER TABLE `order_details`
+  ADD CONSTRAINT `fk_order_detail_variant` FOREIGN KEY (`variant_id`) REFERENCES `product_variants`(`variant_id`) ON DELETE SET NULL;
+
+-- 7) Recommended: update application code to prefer `variant_id` when creating stock_in_details / order_details.
+--    Keep writing `product_id` for compatibility, but set `variant_id` for variant-aware operations.
+
+-- 8) OPTIONAL: If you want to split product into multiple variants based on CSV `sizes` and `colors` columns,
+--    you can run a more advanced script to generate combinations per product. That script is potentially destructive
+--    and should be run only after manual review. Example outline (do NOT run blindly):
+--
+--  BEGIN TRANSACTION;
+--  -- For each product with sizes or colors, generate variants from combinations, then map existing stock_in_details
+--  -- to appropriate variant by matching size/color in stock_in_details metadata (if available).
+--  COMMIT;
+
+-- 9) Quick approach (if you prefer not to use variants): the `products` table already has `sizes` and `colors` columns.
+--    You can update `products.sizes` and `products.colors` with CSV values per product. Example:
+--    ALTER TABLE products ADD COLUMN sizes VARCHAR(255) DEFAULT NULL; -- already present in this schema
+--    UPDATE products SET sizes = 'S,M,L' WHERE product_id = 'P0001';
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- ==========================
+-- USAGE NOTES
+-- ==========================
+-- 1) Backup the database before running this migration.
+-- 2) Run on staging to confirm your application handles `variant_id` correctly.
+-- 3) After migration, update server code to:
+--    - Create/choose `product_variants` when adding products with sizes/colors.
+--    - Use `variant_id` in `stock_in_details` and `order_details` when operations are variant-specific.
+-- 4) If you want a migration script that splits variants automatically by parsing `products.sizes` and `products.colors`,
+--    tell me and I will add that script (it needs rules for combining sizes/colors and handling legacy stock mapping).
 
 
 

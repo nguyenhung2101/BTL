@@ -51,9 +51,9 @@ const userController = {
             const [dupId] = await connection.query("SELECT user_id FROM users WHERE user_id = ?", [userId]);
             if (dupId.length > 0) { await connection.release(); return res.status(409).json({ message: 'User ID đã tồn tại.' }); }
 
-            // Insert User (Status active, must change pass = true)
+            // Insert User (Status active, do not force change by default)
             await connection.query(
-                "INSERT INTO users (user_id, username, password_hash, role_id, status, must_change_password) VALUES (?, ?, ?, ?, 'Active', TRUE)",
+                "INSERT INTO users (user_id, username, password_hash, role_id, status, must_change_password) VALUES (?, ?, ?, ?, 'Active', FALSE)",
                 [userId, username, hashedPassword, roleId]
             );
 

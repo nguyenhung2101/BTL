@@ -37,7 +37,7 @@ export const UserFormModal = ({ isOpen, onClose, initialData, onSave, currentUse
     const [formData, setFormData] = useState(initialData || {
         fullName: '', id: initialId, username: initialId, password: initialId, // Mật khẩu mặc định là Mã NV mới
         roleName: initialRoleName, email: '', phone: '', base_salary: 7000000,
-        employee_type: 'Full-time', department: 'Sales', status: 'Active', must_change_password: true,
+        employee_type: 'Full-time', department: 'Sales', status: 'Active', must_change_password: false,
         date_of_birth: '', address: '', start_date: new Date().toISOString().slice(0, 10), commission_rate: 0.0150,
     });
     
@@ -138,7 +138,7 @@ export const UserFormModal = ({ isOpen, onClose, initialData, onSave, currentUse
                                 <div>
                                     <label className="block text-sm font-medium text-red-700">Mật khẩu TẠM THỜI</label>
                                     <input type="text" name="password" value={formData.password} required className="mt-1 w-full border border-red-300 rounded-lg p-2 bg-red-50 font-mono" disabled />
-                                    <p className="text-xs text-gray-500 mt-1">Mật khẩu mặc định là **Mã NV**. Nhân viên **buộc phải đổi** ở lần đăng nhập đầu tiên.</p>
+                                    <p className="text-xs text-gray-500 mt-1">Mật khẩu mặc định là <strong>{formData.username}</strong>. Nhân viên không bắt buộc phải đổi mật khẩu ngay lập tức.</p>
                                 </div>
                             )}
                             <div>

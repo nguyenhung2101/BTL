@@ -243,9 +243,26 @@ export const getDashboardCurrentStats = async () => {
 
 
 export const getProduct = async (id) => {
-    const response = await api.get(`/products/${id}`);
-    if (response.status !== 200) throw response.data || { message: 'Lỗi tải chi tiết sản phẩm.' };
-    return response.data;
+    try {
+        const response = await api.get(`/products/${id}`);
+        if (response.status !== 200) {
+            throw response.data || { message: 'Lỗi tải chi tiết sản phẩm.' };
+        }
+        return response.data;
+    } catch (error) {
+        console.error('getProduct error:', error);
+        // Nếu có response từ server, trả về message từ server
+        if (error.response) {
+            throw {
+                ...error.response.data,
+                message: error.response.data?.message || 'Không thể tải thông tin sản phẩm.'
+            };
+        }
+        // Nếu là network error hoặc lỗi khác
+        throw {
+            message: error.message || 'Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.'
+        };
+    }
 };
 
 export const createProduct = async (product) => {

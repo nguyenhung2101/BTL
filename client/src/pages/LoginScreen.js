@@ -112,13 +112,18 @@ export const LoginScreen = ({ setPath, setUser, setIsLoggedIn }) => {
 
             setIsLoggedIn(true);
 
-            if (user.mustChangePassword) { setPath('/reset-password'); }
-
-            else if (user.roleName === 'Customer' || user.roleName === ROLES.CUSTOMER.name) { setPath('/shop'); }
-
-            else if (user.roleName === ROLES.OWNER.name) { setPath('/dashboard'); }
-
-            else { const defaultPath = roleToRoutes[user.roleName]?.[0]?.path || '/products'; setPath(defaultPath); }
+            // Only enforce password change if REACT_APP_REQUIRE_PASSWORD_CHANGE === 'true'
+            const requirePwChange = process.env.REACT_APP_REQUIRE_PASSWORD_CHANGE === 'true';
+            if (requirePwChange && user.mustChangePassword) {
+                setPath('/reset-password');
+            } else if (user.roleName === 'Customer' || user.roleName === ROLES.CUSTOMER.name) {
+                setPath('/shop');
+            } else if (user.roleName === ROLES.OWNER.name) {
+                setPath('/dashboard');
+            } else {
+                const defaultPath = roleToRoutes[user.roleName]?.[0]?.path || '/products';
+                setPath(defaultPath);
+            }
 
         } catch (err) { setError(err.message || 'Lỗi đăng nhập.'); }
 

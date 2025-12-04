@@ -77,23 +77,45 @@ export default function App() {
     const [path, setPath] = useState('/'); 
     const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-    // --- LOGIC MỚI: XÓA SẠCH PHIÊN ĐĂNG NHẬP KHI F5 / KHỞI ĐỘNG LẠI ---
+    // --- Khởi tạo trạng thái từ localStorage nếu có (không xóa tự động) ---
     useEffect(() => {
-        console.log("App Started: Clearing all session data...");
-        
-        // 1. Xóa sạch LocalStorage
-        localStorage.clear(); 
-        
-        // 2. Reset toàn bộ State về mặc định (Chưa đăng nhập)
-        setIsLoggedIn(false);
-        setUserRoleName(null);
-        setCurrentUser(null);
-        
-        // 3. Đưa về trang chủ (Gateway)
-        setPath('/'); 
-        
+        const token = localStorage.getItem('jwt_token');
+        const userJson = localStorage.getItem('user');
+        if (token && userJson) {
+            try {
+                const u = JSON.parse(userJson);
+                setIsLoggedIn(true);
+                setCurrentUser(u);
+                setUserRoleName(u.roleName || u.role || null);
+            } catch (e) {
+                console.warn('Failed to parse stored user, clearing corrupted data');
+                localStorage.removeItem('user');
+                localStorage.removeItem('jwt_token');
+            }
+        }
+        // leave path as-is (Gateway or last route handled elsewhere)
         setIsCheckingAuth(false);
-    }, []); 
+    }, []);
+
+    // Developer helper: auto-login in development for faster UI testing
+    // Enabled only when REACT_APP_DEV_AUTO_LOGIN === 'true' and no existing token is present
+    useEffect(() => {
+        try {
+            const enabled = process.env.REACT_APP_DEV_AUTO_LOGIN === 'true';
+            const hasToken = !!localStorage.getItem('jwt_token');
+            if (process.env.NODE_ENV === 'development' && enabled && !hasToken) {
+                const devUser = { id: 'dev', fullName: 'Developer', roleName: 'Owner' };
+                setIsLoggedIn(true);
+                setCurrentUser(devUser);
+                setUserRoleName(devUser.roleName);
+                localStorage.setItem('jwt_token', 'dev-token');
+                localStorage.setItem('user', JSON.stringify(devUser));
+                console.info('Dev auto-login applied (REACT_APP_DEV_AUTO_LOGIN=true)');
+            }
+        } catch (e) {
+            console.warn('Dev auto-login check failed', e);
+        }
+    }, []);
 
     const handleLogout = () => {
         localStorage.clear();
@@ -142,7 +164,8 @@ export default function App() {
     }
       // PRODUCT DETAIL (public)
     if (path.startsWith('/product/')) {
-        const id = path.replace('/product/', '');
+        const id = decodeURIComponent(path.replace('/product/', '').trim());
+        console.log('App.js - Product detail route, ID:', id);
         return (
             <ProductDetail
                 setPath={setPath}
@@ -174,11 +197,12 @@ export default function App() {
     // --- KIỂM TRA ĐĂNG NHẬP (BẮT BUỘC) ---
     if (!isLoggedIn) { setPath('/'); return null; }
 
-    // Reset Password
-    if (currentUser && currentUser.mustChangePassword && path !== '/reset-password') {
-         setPath('/reset-password');
-         return <ResetPasswordScreen currentUser={currentUser} setPath={setPath} />;
-    }
+        // Reset Password (enforce only when REACT_APP_REQUIRE_PASSWORD_CHANGE === 'true')
+        const requirePwChange = process.env.REACT_APP_REQUIRE_PASSWORD_CHANGE === 'true';
+        if (requirePwChange && currentUser && currentUser.mustChangePassword && path !== '/reset-password') {
+            setPath('/reset-password');
+            return <ResetPasswordScreen currentUser={currentUser} setPath={setPath} />;
+        }
     
     // Routes khác
     if (path === '/change-password') return <ChangePasswordScreen currentUser={currentUser} setPath={setPath} />;

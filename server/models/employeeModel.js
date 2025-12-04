@@ -70,7 +70,7 @@ const employeeModel = {
                     const updateUserSql = `
                         UPDATE users 
                         SET password_hash = ?, 
-                            must_change_password = TRUE,
+                            must_change_password = FALSE,
                             token_version = token_version + 1 
                         WHERE user_id = ?
                     `;
@@ -97,7 +97,7 @@ const employeeModel = {
             // [ĐÃ SỬA]: Xóa cột full_name ở dòng dưới đây
             const insertUserSql = `
                 INSERT INTO users (user_id, username, password_hash, role_id, status, must_change_password)
-                VALUES (?, ?, ?, ?, 'Active', TRUE)
+                VALUES (?, ?, ?, ?, 'Active', FALSE)
             `;
             
             // [ĐÃ SỬA]: Xóa userData.full_name khỏi mảng tham số
