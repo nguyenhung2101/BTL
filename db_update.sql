@@ -253,60 +253,6 @@ SET stock_quantity = (
             AND o.status <> 'Đã Hủy'), 0)
 );
 
-USE `store_management_db`;
-
-DROP TRIGGER IF EXISTS `after_stock_in_update_price`;
-
-DELIMITER $$
-
-CREATE TRIGGER `after_stock_in_update_price`
-AFTER INSERT ON `stock_in_details`
-FOR EACH ROW
-BEGIN
-    DECLARE _product_id VARCHAR(20);
-    DECLARE _old_stock INT DEFAULT 0;
-    DECLARE _current_cost DECIMAL(18,2) DEFAULT 0;
-    DECLARE _new_avg_cost DECIMAL(18,2);
-    DECLARE _total_qty INT;
-
-    -- 1. Tìm product_id từ variant_id vừa nhập
-    SELECT product_id INTO _product_id 
-    FROM product_variants 
-    WHERE variant_id = NEW.variant_id;
-
-    -- 2. Lấy số lượng tồn hiện tại của CẢ SẢN PHẨM (tất cả variants cộng lại)
-    -- Lý do: Giá vốn (cost_price) đang để ở bảng Products (chung cho cả dòng sp)
-    SELECT 
-        IFNULL(SUM(stock_quantity), 0) INTO _old_stock
-    FROM product_variants
-    WHERE product_id = _product_id;
-
-    -- 3. Lấy giá vốn hiện tại
-    SELECT cost_price INTO _current_cost
-    FROM products
-    WHERE product_id = _product_id;
-
-    -- 4. Tính giá vốn mới (Bình quân gia quyền)
-    -- Công thức: ((Tồn cũ * Giá cũ) + (Nhập mới * Giá mới)) / (Tồn cũ + Nhập mới)
-    SET _total_qty = _old_stock + NEW.quantity;
-    
-    IF _total_qty > 0 THEN
-        SET _new_avg_cost = ((_old_stock * _current_cost) + (NEW.quantity * NEW.cost_price)) / _total_qty;
-        
-        -- 5. Cập nhật lại giá vốn mới vào bảng products
-        UPDATE products 
-        SET cost_price = _new_avg_cost 
-        WHERE product_id = _product_id;
-    END IF;
-
-    -- 6. Cập nhật luôn số lượng tồn kho vào bảng variant
-    UPDATE product_variants
-    SET stock_quantity = stock_quantity + NEW.quantity
-    WHERE variant_id = NEW.variant_id;
-
-END$$
-
-DELIMITER ;
 
 -- 3. Kiểm tra lại kết quả (Sẽ thấy chênh lệch về 0 hoặc rất nhỏ)
 SELECT 'Đã cập nhật xong dữ liệu!' AS Thong_Bao;
@@ -1014,256 +960,6 @@ INSERT INTO stock_in_details (stock_in_id, variant_id, quantity, cost_price) VAL
 -- SI0048
 ('SI0048','V088_2', 100, 900000), ('SI0048','V089_2', 100, 1200000), ('SI0048','V090_2', 100, 700000);
 
-INSERT INTO orders (order_id, customer_id, order_date, completed_date, order_channel, direct_delivery, subtotal, shipping_cost, final_total, status, payment_status, payment_method, staff_id, delivery_staff_id) VALUES
--- THÁNG 11/2024 (Tổng ~150 Triệu)
-('ORD001','CUS1','2024-11-05 10:00:00','2024-11-06 14:00:00','Online',FALSE, 45000000, 50000, 45050000, 'Hoàn Thành','Đã Thanh Toán','Chuyển khoản','SALE01','SHIP01'),
-('ORD002','CUS2','2024-11-07 11:30:00','2024-11-07 12:00:00','Trực tiếp',TRUE, 8200000, 0, 8200000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-('ORD003','CUS3','2024-11-10 09:45:00','2024-11-11 12:30:00','Online',FALSE, 62000000, 100000, 62100000, 'Hoàn Thành','Đã Thanh Toán','Thẻ tín dụng','OS03','SHIP02'),
-('ORD004','CUS4','2024-11-15 14:00:00',NULL,'Trực tiếp',TRUE, 15000000, 0, 15000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE01',NULL),
-('ORD005','CUS5','2024-11-20 13:20:00','2024-11-21 10:00:00','Online',FALSE, 25000000, 30000, 25030000, 'Hoàn Thành','Đã Thanh Toán','Chuyển khoản','SALE02','SHIP01'),
-
--- THÁNG 12/2024 (Tổng ~180 Triệu)
-('ORD006','CUS6','2024-12-02 09:15:00','2024-12-03 11:30:00','Online',FALSE, 55000000, 50000, 55050000, 'Hoàn Thành','Đã Thanh Toán','Thẻ tín dụng','OS01','SHIP02'),
-('ORD007','CUS7','2024-12-05 10:20:00',NULL,'Trực tiếp',TRUE, 22000000, 0, 22000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-('ORD008','CUS8','2024-12-12 11:45:00','2024-12-13 14:50:00','Online',FALSE, 48000000, 40000, 48040000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','OS03','SHIP03'),
-('ORD009','CUS9','2024-12-20 14:10:00',NULL,'Trực tiếp',TRUE, 35000000, 0, 35000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE01',NULL),
-('ORD010','CUS10','2024-12-25 10:05:00','2024-12-26 13:20:00','Online',FALSE, 25000000, 30000, 25030000, 'Hoàn Thành','Đã Thanh Toán','Thẻ tín dụng','OS02','SHIP01'),
-
--- THÁNG 01/2025 (Tổng ~130 Triệu)
-('ORD011','CUS11','2025-01-05 10:00:00',NULL,'Trực tiếp',TRUE, 40000000, 0, 40000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-('ORD012','CUS12','2025-01-10 15:30:00','2025-01-11 16:20:00','Online',FALSE, 38000000, 40000, 38040000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','OS03','SHIP01'),
-('ORD013','CUS13','2025-01-15 09:50:00','2025-01-16 11:40:00','Online',FALSE, 32000000, 30000, 32030000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE01','SHIP02'),
-('ORD014','CUS14','2025-01-25 15:10:00',NULL,'Trực tiếp',TRUE, 28000000, 0, 28000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-
--- THÁNG 02/2025 (Tổng ~110 Triệu)
-('ORD015','CUS15','2025-02-05 09:30:00','2025-02-06 12:00:00','Online',FALSE, 45000000, 40000, 45040000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','OS01','SHIP01'),
-('ORD016','CUS16','2025-02-14 10:45:00',NULL,'Trực tiếp',TRUE, 55000000, 0, 55000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-('ORD017','CUS17','2025-02-20 11:50:00','2025-02-21 14:20:00','Online',FALSE, 12000000, 20000, 12020000, 'Hoàn Thành','Đã Thanh Toán','Thẻ tín dụng','OS03','SHIP02'),
-
--- THÁNG 03/2025 (Tổng ~105 Triệu)
-('ORD018','CUS18','2025-03-05 09:30:00','2025-03-06 12:00:00','Online',FALSE, 65000000, 40000, 65040000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','OS01','SHIP01'),
-('ORD019','CUS19','2025-03-14 10:45:00',NULL,'Trực tiếp',TRUE, 30000000, 0, 30000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-('ORD020','CUS20','2025-03-20 11:50:00','2025-03-21 14:20:00','Online',FALSE, 12000000, 20000, 12020000, 'Hoàn Thành','Đã Thanh Toán','Thẻ tín dụng','OS03','SHIP02'),
-
--- THÁNG 04/2025 (Tổng ~110 Triệu)
-('ORD021','CUS21','2025-04-05 09:30:00','2025-04-06 12:00:00','Online',FALSE, 55000000, 40000, 55040000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','OS01','SHIP01'),
-('ORD022','CUS22','2025-04-14 10:45:00',NULL,'Trực tiếp',TRUE, 40000000, 0, 40000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-('ORD023','CUS23','2025-04-20 11:50:00','2025-04-21 14:20:00','Online',FALSE, 15000000, 20000, 15020000, 'Hoàn Thành','Đã Thanh Toán','Thẻ tín dụng','OS03','SHIP02'),
-
--- THÁNG 05/2025 (Tổng ~120 Triệu)
-('ORD024','CUS24','2025-05-05 09:30:00','2025-05-06 12:00:00','Online',FALSE, 60000000, 40000, 60040000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','OS01','SHIP01'),
-('ORD025','CUS25','2025-05-14 10:45:00',NULL,'Trực tiếp',TRUE, 40000000, 0, 40000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-('ORD026','CUS26','2025-05-20 11:50:00','2025-05-21 14:20:00','Online',FALSE, 20000000, 20000, 20020000, 'Hoàn Thành','Đã Thanh Toán','Thẻ tín dụng','OS03','SHIP02'),
-
--- THÁNG 06/2025 (Tổng ~115 Triệu)
-('ORD027','CUS27','2025-06-05 09:30:00','2025-06-06 12:00:00','Online',FALSE, 55000000, 40000, 55040000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','OS01','SHIP01'),
-('ORD028','CUS28','2025-06-14 10:45:00',NULL,'Trực tiếp',TRUE, 40000000, 0, 40000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-('ORD029','CUS29','2025-06-20 11:50:00','2025-06-21 14:20:00','Online',FALSE, 20000000, 20000, 20020000, 'Hoàn Thành','Đã Thanh Toán','Thẻ tín dụng','OS03','SHIP02'),
-
--- THÁNG 07/2025 (Tổng ~105 Triệu)
-('ORD030','CUS30','2025-07-05 09:30:00','2025-07-06 12:00:00','Online',FALSE, 45000000, 40000, 45040000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','OS01','SHIP01'),
-('ORD031','CUS31','2025-07-14 10:45:00',NULL,'Trực tiếp',TRUE, 35000000, 0, 35000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-('ORD032','CUS32','2025-07-20 11:50:00','2025-07-21 14:20:00','Online',FALSE, 25000000, 20000, 25020000, 'Hoàn Thành','Đã Thanh Toán','Thẻ tín dụng','OS03','SHIP02'),
-
--- THÁNG 08/2025 (Tổng ~120 Triệu)
-('ORD033','CUS33','2025-08-05 09:30:00','2025-08-06 12:00:00','Online',FALSE, 60000000, 40000, 60040000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','OS01','SHIP01'),
-('ORD034','CUS34','2025-08-14 10:45:00',NULL,'Trực tiếp',TRUE, 40000000, 0, 40000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-('ORD035','CUS35','2025-08-20 11:50:00','2025-08-21 14:20:00','Online',FALSE, 20000000, 20000, 20020000, 'Hoàn Thành','Đã Thanh Toán','Thẻ tín dụng','OS03','SHIP02'),
-
--- THÁNG 09/2025 (Tổng ~125 Triệu)
-('ORD036','CUS36','2025-09-05 09:30:00','2025-09-06 12:00:00','Online',FALSE, 65000000, 40000, 65040000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','OS01','SHIP01'),
-('ORD037','CUS37','2025-09-14 10:45:00',NULL,'Trực tiếp',TRUE, 40000000, 0, 40000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-('ORD038','CUS38','2025-09-20 11:50:00','2025-09-21 14:20:00','Online',FALSE, 20000000, 20000, 20020000, 'Hoàn Thành','Đã Thanh Toán','Thẻ tín dụng','OS03','SHIP02'),
-
--- THÁNG 10/2025 (Tổng ~110 Triệu)
-('ORD039','CUS39','2025-10-05 09:30:00','2025-10-06 12:00:00','Online',FALSE, 50000000, 40000, 50040000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','OS01','SHIP01'),
-('ORD040','CUS40','2025-10-14 10:45:00',NULL,'Trực tiếp',TRUE, 40000000, 0, 40000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-('ORD041','CUS41','2025-10-20 11:50:00','2025-10-21 14:20:00','Online',FALSE, 20000000, 20000, 20020000, 'Hoàn Thành','Đã Thanh Toán','Thẻ tín dụng','OS03','SHIP02'),
-
--- THÁNG 11/2025 (Tổng ~115 Triệu)
-('ORD042','CUS42','2025-11-05 09:30:00','2025-11-06 12:00:00','Online',FALSE, 55000000, 40000, 55040000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','OS01','SHIP01'),
-('ORD043','CUS43','2025-11-14 10:45:00',NULL,'Trực tiếp',TRUE, 40000000, 0, 40000000, 'Hoàn Thành','Đã Thanh Toán','Tiền mặt','SALE02',NULL),
-('ORD044','CUS44','2025-11-20 11:50:00','2025-11-21 14:20:00','Online',FALSE, 20000000, 20000, 20020000, 'Hoàn Thành','Đã Thanh Toán','Thẻ tín dụng','OS03','SHIP02');
-INSERT INTO order_details (order_id, variant_id, quantity, price_at_order) VALUES
--- ORD001 (45 Triệu - Khách sỉ mua Giày & Áo)
-('ORD001','V086_1', 10, 2500000), -- 10 đôi AF1 (25tr)
-('ORD001','V005_1', 20, 1000000), -- 20 Blazer (20tr)
-
--- ORD002 (8.2 Triệu)
-('ORD002','V041_1', 2, 2500000),  -- 2 Nước hoa GoodGirl (5tr)
-('ORD002','V042_1', 1, 3200000),  -- 1 Chanel Bleu (3.2tr)
-
--- ORD003 (62 Triệu - Đơn sỉ Mỹ phẩm)
-('ORD003','V032_2', 50, 850000),  -- 50 Toner Kiehl (42.5tr)
-('ORD003','V034_1', 30, 450000),  -- 30 Kem B5 (13.5tr)
-('ORD003','V026_1', 30, 200000),  -- 30 Son (6tr)
-
--- ORD004 (15 Triệu)
-('ORD004','V059_1', 10, 850000),  -- 10 Túi kẹp nách (8.5tr)
-('ORD004','V022_1', 10, 650000),  -- 10 Mũ NY (6.5tr)
-
--- ORD005 (25 Triệu)
-('ORD005','V087_1', 5, 3000000),  -- 5 Giày Boost (15tr)
-('ORD005','V060_1', 5, 1200000),  -- 5 Vali (6tr)
-('ORD005','V066_1', 4, 1000000),  -- 4 Ốp UAG (4tr)
-
--- ORD006 (55 Triệu - Đơn sỉ Nước hoa)
-('ORD006','V042_1', 10, 3200000), -- 10 Chanel Bleu (32tr)
-('ORD006','V041_1', 8, 2500000),  -- 8 GoodGirl (20tr)
-('ORD006','V021_1', 1, 3000000),  -- Kính (3tr)
-
--- ORD007 (22 Triệu)
-('ORD007','V089_1', 10, 1800000), -- 10 Giày MLB (18tr)
-('ORD007','V057_1', 8, 500000),   -- 8 Túi chéo (4tr)
-
--- ORD008 (48 Triệu - Giày hiệu)
-('ORD008','V086_1', 10, 2500000), -- 10 AF1 (25tr)
-('ORD008','V087_1', 5, 3000000),  -- 5 Boost (15tr)
-('ORD008','V090_1', 5, 1200000),  -- 5 Vans (6tr)
-('ORD008','V066_1', 2, 1000000),  -- 2 Ốp (2tr)
-
--- ORD009 (35 Triệu)
-('ORD009','V005_1', 20, 1000000), -- 20 Blazer (20tr)
-('ORD009','V001_1', 20, 500000),  -- 20 Đầm (10tr)
-('ORD009','V003_1', 10, 500000),  -- 10 Jeans (5tr)
-
--- ORD010 (25 Triệu)
-('ORD010','V060_2', 10, 1200000), -- 10 Vali xanh (12tr)
-('ORD010','V058_1', 20, 400000),  -- 20 Balo (8tr)
-('ORD010','V056_1', 50, 100000),  -- 50 Tote (5tr)
-
--- ORD011 (40 Triệu)
-('ORD011','V042_1', 10, 3200000), -- 10 Chanel (32tr)
-('ORD011','V022_1', 10, 650000),  -- 10 Mũ (6.5tr)
-('ORD011','V025_1', 3, 500000),   -- 3 Ví (1.5tr)
-
--- ORD012 (38 Triệu)
-('ORD012','V088_1', 10, 1500000), -- 10 Converse (15tr)
-('ORD012','V089_1', 10, 1800000), -- 10 MLB (18tr)
-('ORD012','V021_1', 1, 5000000),  -- 1 Kính hiệu (5tr)
-
--- ORD013 (32 Triệu)
-('ORD013','V032_2', 20, 850000),  -- 20 Toner (17tr)
-('ORD013','V034_1', 20, 500000),  -- 20 Kem (10tr)
-('ORD013','V035_1', 10, 300000),  -- 10 KCN (3tr)
-('ORD013','V026_1', 10, 200000),  -- 10 Son (2tr)
-
--- ORD014 (28 Triệu)
-('ORD014','V006_1', 20, 400000),  -- 20 Sơ mi (8tr)
-('ORD014','V007_1', 20, 500000),  -- 20 Quần âu (10tr)
-('ORD014','V008_1', 10, 600000),  -- 10 Polo (6tr)
-('ORD014','V018_1', 2, 2000000),  -- 2 Giày tây (4tr)
-
--- ORD015 (45 Triệu)
-('ORD015','V041_1', 10, 2500000), -- 10 GoodGirl (25tr)
-('ORD015','V086_1', 8, 2500000),  -- 8 AF1 (20tr)
-
--- ORD016 (55 Triệu - Valentine)
-('ORD016','V061_1', 50, 600000),  -- 50 Set quà (30tr)
-('ORD016','V042_1', 5, 3200000),  -- 5 Chanel (16tr)
-('ORD016','V025_1', 10, 500000),  -- 10 Ví (5tr)
-('ORD016','V026_1', 20, 200000),  -- 20 Son (4tr)
-
--- ORD017 (12 Triệu)
-('ORD017','V001_1', 10, 500000),  -- 10 Đầm (5tr)
-('ORD017','V016_1', 10, 500000),  -- 10 Cao gót (5tr)
-('ORD017','V025_1', 4, 500000),   -- 4 Ví (2tr)
-
--- ORD018 (65 Triệu)
-('ORD018','V087_1', 15, 3000000), -- 15 Boost (45tr)
-('ORD018','V086_1', 8, 2500000),  -- 8 AF1 (20tr)
-
--- ORD019 (30 Triệu)
-('ORD019','V005_1', 20, 1000000), -- 20 Blazer (20tr)
-('ORD019','V004_1', 20, 500000),  -- 20 Váy (10tr)
-
--- ORD020 (12 Triệu)
-('ORD020','V060_2', 10, 1200000), -- 10 Vali (12tr)
-
--- ORD021 (55 Triệu)
-('ORD021','V041_1', 10, 2500000), -- 10 GoodGirl (25tr)
-('ORD021','V042_1', 5, 3200000),  -- 5 Chanel (16tr)
-('ORD021','V089_1', 8, 1800000),  -- 8 MLB (14.4tr)
-
--- ORD022 (40 Triệu)
-('ORD022','V086_1', 16, 2500000), -- 16 AF1 (40tr)
-
--- ORD023 (15 Triệu)
-('ORD023','V032_2', 10, 850000),  -- 10 Toner (8.5tr)
-('ORD023','V034_1', 10, 450000),  -- 10 Kem (4.5tr)
-('ORD023','V026_1', 10, 200000),  -- 10 Son (2tr)
-
--- ORD024 (60 Triệu)
-('ORD024','V087_1', 20, 3000000), -- 20 Boost (60tr)
-
--- ORD025 (40 Triệu)
-('ORD025','V042_1', 10, 3200000), -- 10 Chanel (32tr)
-('ORD025','V059_1', 10, 800000),  -- 10 Túi (8tr)
-
--- ORD026 (20 Triệu)
-('ORD026','V005_1', 20, 1000000), -- 20 Blazer (20tr)
-
--- ORD027 (55 Triệu)
-('ORD027','V086_1', 22, 2500000), -- 22 AF1 (55tr)
-
--- ORD028 (40 Triệu)
-('ORD028','V041_1', 16, 2500000), -- 16 GoodGirl (40tr)
-
--- ORD029 (20 Triệu)
-('ORD029','V060_1', 10, 1200000), -- 10 Vali Hồng (12tr)
-('ORD029','V058_1', 20, 400000),  -- 20 Balo (8tr)
-
--- ORD030 (45 Triệu)
-('ORD030','V087_1', 15, 3000000), -- 15 Boost (45tr)
-
--- ORD031 (35 Triệu)
-('ORD031','V042_1', 10, 3200000), -- 10 Chanel (32tr)
-('ORD031','V021_1', 1, 3000000),  -- 1 Kính (3tr)
-
--- ORD032 (25 Triệu)
-('ORD032','V086_1', 10, 2500000), -- 10 AF1 (25tr)
-
--- ORD033 (60 Triệu)
-('ORD033','V087_1', 20, 3000000), -- 20 Boost (60tr)
-
--- ORD034 (40 Triệu)
-('ORD034','V041_1', 16, 2500000), -- 16 GoodGirl (40tr)
-
--- ORD035 (20 Triệu)
-('ORD035','V005_1', 20, 1000000), -- 20 Blazer (20tr)
-
--- ORD036 (65 Triệu)
-('ORD036','V086_1', 26, 2500000), -- 26 AF1 (65tr)
-
--- ORD037 (40 Triệu)
-('ORD037','V042_1', 12, 3200000), -- 12 Chanel (38.4tr)
-('ORD037','V026_1', 8, 200000),   -- 8 Son (1.6tr)
-
--- ORD038 (20 Triệu)
-('ORD038','V060_2', 10, 1200000), -- 10 Vali xanh (12tr)
-('ORD038','V058_1', 20, 400000),  -- 20 Balo (8tr)
-
--- ORD039 (50 Triệu)
-('ORD039','V087_1', 10, 3000000), -- 10 Boost (30tr)
-('ORD039','V086_1', 8, 2500000),  -- 8 AF1 (20tr)
-
--- ORD040 (40 Triệu)
-('ORD040','V041_1', 16, 2500000), -- 16 GoodGirl (40tr)
-
--- ORD041 (20 Triệu)
-('ORD041','V005_1', 20, 1000000), -- 20 Blazer (20tr)
-
--- ORD042 (55 Triệu)
-('ORD042','V086_1', 22, 2500000), -- 22 AF1 (55tr)
-
--- ORD043 (40 Triệu)
-('ORD043','V042_1', 12, 3200000), -- 12 Chanel (38.4tr)
-('ORD043','V026_1', 8, 200000),   -- 8 Son (1.6tr)
-
--- ORD044 (20 Triệu)
-('ORD044','V060_1', 10, 1200000), -- 10 Vali Hồng (12tr)
-('ORD044','V058_1', 20, 400000);  -- 20 Balo (8tr)
-
 -- chèn sản phẩm
 INSERT INTO products (product_id, name, category_id, description, brand, base_price, cost_price) VALUES
 -- 1. Thời trang nữ (P001-P005)
@@ -1955,6 +1651,414 @@ SET stock_quantity = (
     - 
     IFNULL((SELECT SUM(quantity) FROM order_details WHERE variant_id = v.variant_id), 0)
 );
+INSERT INTO orders (order_id, customer_id, order_date, completed_date, order_channel, direct_delivery, subtotal, shipping_cost, final_total, status, payment_status, payment_method, staff_id, delivery_staff_id) VALUES
+-- ================== NĂM 2024 ==================
+-- THÁNG 11/2024
+('ORD001', 'CUS1',  '2024-11-05 10:00:00', '2024-11-06 14:00:00', 'Online',    FALSE, 45000000, 50000, 45050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS01',   'SHIP01'),
+('ORD002', 'CUS2',  '2024-11-07 11:30:00', '2024-11-07 12:00:00', 'Trực tiếp', TRUE,  8200000,  0,     8200000,  'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD003', 'CUS3',  '2024-11-10 09:45:00', '2024-11-11 12:30:00', 'Online',    FALSE, 62000000, 100000, 62100000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP02'),
+('ORD004', 'CUS4',  '2024-11-15 14:00:00', NULL,                  'Trực tiếp', TRUE,  15000000, 0,     15000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE01', NULL),
+('ORD005', 'CUS5',  '2024-11-20 13:20:00', '2024-11-21 10:00:00', 'Online',    FALSE, 25000000, 30000, 25030000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS01',   'SHIP01'),
+
+-- THÁNG 12/2024
+('ORD006', 'CUS6',  '2024-12-02 09:15:00', '2024-12-03 11:30:00', 'Online',    FALSE, 55000000, 50000, 55050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS01',   'SHIP02'),
+('ORD007', 'CUS7',  '2024-12-05 10:20:00', NULL,                  'Trực tiếp', TRUE,  22000000, 0,     22000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD008', 'CUS8',  '2024-12-12 11:45:00', '2024-12-13 14:50:00', 'Online',    FALSE, 48000000, 40000, 48040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'OS02',   'SHIP03'),
+('ORD009', 'CUS9',  '2024-12-20 14:10:00', NULL,                  'Trực tiếp', TRUE,  35000000, 0,     35000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE01', NULL),
+('ORD010', 'CUS10', '2024-12-25 10:05:00', '2024-12-26 13:20:00', 'Online',    FALSE, 25000000, 30000, 25030000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP01'),
+
+-- ================== NĂM 2025 ==================
+-- THÁNG 01/2025
+('ORD011', 'CUS11', '2025-01-05 10:00:00', NULL,                  'Trực tiếp', TRUE,  40000000, 0,     40000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE03', NULL),
+('ORD012', 'CUS12', '2025-01-10 15:30:00', '2025-01-11 16:20:00', 'Online',    FALSE, 38000000, 40000, 38040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'OS01',   'SHIP01'),
+('ORD013', 'CUS13', '2025-01-15 09:50:00', '2025-01-16 11:40:00', 'Online',    FALSE, 32000000, 30000, 32030000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'OS01',   'SHIP02'),
+('ORD014', 'CUS41', '2025-01-15 14:30:00', '2025-01-16 10:00:00', 'Online',    FALSE, 28000000, 30000, 28030000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS02',   'SHIP03'),
+('ORD015', 'CUS42', '2025-01-20 09:00:00', NULL,                  'Trực tiếp', TRUE,  22000000, 0,     22000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE01', NULL),
+('ORD016', 'CUS14', '2025-01-25 15:10:00', NULL,                  'Trực tiếp', TRUE,  28000000, 0,     28000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD017', 'CUS101','2025-01-28 09:00:00', '2025-01-28 10:00:00', 'Trực tiếp', TRUE,  25000000, 0,     25000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'SALE01', NULL),
+('ORD018', 'CUS130','2025-01-30 14:00:00', '2025-01-31 09:00:00', 'Online',    FALSE, 60000000, 100000,60100000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS01',   'SHIP01'),
+
+-- THÁNG 02/2025
+('ORD019', 'CUS15', '2025-02-05 09:30:00', '2025-02-06 12:00:00', 'Online',    FALSE, 45000000, 40000, 45040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'OS01',   'SHIP01'),
+('ORD020', 'CUS43', '2025-02-12 10:00:00', '2025-02-13 15:00:00', 'Online',    FALSE, 35000000, 40000, 35040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP02'),
+('ORD021', 'CUS16', '2025-02-14 10:45:00', NULL,                  'Trực tiếp', TRUE,  55000000, 0,     55000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD022', 'CUS44', '2025-02-18 16:00:00', NULL,                  'Trực tiếp', TRUE,  25000000, 0,     25000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE03', NULL),
+('ORD023', 'CUS17', '2025-02-20 11:50:00', '2025-02-21 14:20:00', 'Online',    FALSE, 12000000, 20000, 12020000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS01',   'SHIP03'),
+('ORD024', 'CUS102','2025-02-25 14:00:00', '2025-02-26 10:00:00', 'Online',    FALSE, 32000000, 50000, 32050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS01',   'SHIP01'),
+('ORD025', 'CUS103','2025-02-27 16:00:00', NULL,                  'Trực tiếp', TRUE,  15000000, 0,     15000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD026', 'CUS131','2025-02-28 10:00:00', '2025-02-28 12:00:00', 'Trực tiếp', TRUE,  64000000, 0,     64000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE01', NULL),
+
+-- THÁNG 03/2025
+('ORD027', 'CUS18', '2025-03-05 09:30:00', '2025-03-06 12:00:00', 'Online',    FALSE, 65000000, 40000, 65040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'OS02',   'SHIP01'),
+('ORD028', 'CUS45', '2025-03-10 09:30:00', '2025-03-11 11:00:00', 'Online',    FALSE, 30000000, 30000, 30030000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS02',   'SHIP03'),
+('ORD029', 'CUS19', '2025-03-14 10:45:00', NULL,                  'Trực tiếp', TRUE,  30000000, 0,     30000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE01', NULL),
+('ORD030', 'CUS20', '2025-03-20 11:50:00', '2025-03-21 14:20:00', 'Online',    FALSE, 12000000, 20000, 12020000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS01',   'SHIP02'),
+('ORD031', 'CUS46', '2025-03-22 14:00:00', NULL,                  'Trực tiếp', TRUE,  25000000, 0,     25000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE03', NULL),
+('ORD032', 'CUS104','2025-03-25 10:00:00', '2025-03-26 15:00:00', 'Online',    FALSE, 35000000, 50000, 35050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP02'),
+('ORD033', 'CUS105','2025-03-28 09:30:00', NULL,                  'Trực tiếp', TRUE,  18000000, 0,     18000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE01', NULL),
+('ORD034', 'CUS132','2025-03-30 09:30:00', '2025-03-31 15:00:00', 'Online',    FALSE, 55000000, 50000, 55050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS01',   'SHIP02'),
+
+-- THÁNG 04/2025
+('ORD035', 'CUS21', '2025-04-05 09:30:00', '2025-04-06 12:00:00', 'Online',    FALSE, 55000000, 40000, 55040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'OS01',   'SHIP01'),
+('ORD036', 'CUS47', '2025-04-12 11:00:00', '2025-04-13 09:00:00', 'Online',    FALSE, 38000000, 50000, 38050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS01',   'SHIP01'),
+('ORD037', 'CUS22', '2025-04-14 10:45:00', NULL,                  'Trực tiếp', TRUE,  40000000, 0,     40000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD038', 'CUS23', '2025-04-20 11:50:00', '2025-04-21 14:00:00', 'Online',    FALSE, 15000000, 20000, 15020000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP02'),
+('ORD039', 'CUS48', '2025-04-25 15:30:00', NULL,                  'Trực tiếp', TRUE,  27000000, 0,     27000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD040', 'CUS106','2025-04-25 11:00:00', '2025-04-26 14:00:00', 'Online',    FALSE, 30000000, 40000, 30040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS02',   'SHIP03'),
+('ORD041', 'CUS107','2025-04-28 15:00:00', NULL,                  'Trực tiếp', TRUE,  16000000, 0,     16000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD042', 'CUS133','2025-04-30 08:00:00', '2025-05-01 10:00:00', 'Online',    FALSE, 58000000, 50000, 58050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS01',   'SHIP03'),
+
+-- THÁNG 05/2025
+('ORD043', 'CUS24', '2025-05-05 09:30:00', '2025-05-06 12:00:00', 'Online',    FALSE, 60000000, 40000, 60040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'OS01',   'SHIP01'),
+('ORD044', 'CUS25', '2025-05-14 10:45:00', NULL,                  'Trực tiếp', TRUE,  40000000, 0,     40000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD045', 'CUS49', '2025-05-15 10:00:00', '2025-05-16 14:00:00', 'Online',    FALSE, 35000000, 40000, 35040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS02',   'SHIP02'),
+('ORD046', 'CUS26', '2025-05-20 11:50:00', '2025-05-21 14:20:00', 'Online',    FALSE, 20000000, 20000, 20020000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP02'),
+('ORD047', 'CUS108','2025-05-25 13:00:00', '2025-05-26 09:00:00', 'Online',    FALSE, 35000000, 50000, 35050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS01',   'SHIP01'),
+('ORD048', 'CUS50', '2025-05-28 16:00:00', NULL,                  'Trực tiếp', TRUE,  25000000, 0,     25000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE01', NULL),
+('ORD049', 'CUS134','2025-05-30 11:00:00', '2025-05-30 13:00:00', 'Trực tiếp', TRUE,  60000000, 0,     60000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+
+-- THÁNG 06/2025
+('ORD050', 'CUS27', '2025-06-05 09:30:00', '2025-06-06 12:00:00', 'Online',    FALSE, 55000000, 40000, 55040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'OS01',   'SHIP01'),
+('ORD051', 'CUS51', '2025-06-12 09:00:00', '2025-06-13 11:00:00', 'Online',    FALSE, 32000000, 30000, 32030000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP03'),
+('ORD052', 'CUS28', '2025-06-14 10:45:00', NULL,                  'Trực tiếp', TRUE,  40000000, 0,     40000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD053', 'CUS29', '2025-06-20 11:50:00', '2025-06-21 14:20:00', 'Online',    FALSE, 20000000, 20000, 20020000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP02'),
+('ORD054', 'CUS109','2025-06-25 14:00:00', '2025-06-26 16:00:00', 'Online',    FALSE, 28000000, 40000, 28040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS02',   'SHIP02'),
+('ORD055', 'CUS52', '2025-06-25 14:00:00', NULL,                  'Trực tiếp', TRUE,  23000000, 0,     23000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD056', 'CUS110','2025-06-28 10:00:00', NULL,                  'Trực tiếp', TRUE,  15000000, 0,     15000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE01', NULL),
+('ORD057', 'CUS135','2025-06-29 15:00:00', '2025-06-30 11:00:00', 'Online',    FALSE, 55000000, 40000, 55040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS01',   'SHIP01'),
+
+-- THÁNG 07/2025
+('ORD058', 'CUS30', '2025-07-05 09:30:00', '2025-07-06 12:00:00', 'Online',    FALSE, 45000000, 40000, 45040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'OS01',   'SHIP01'),
+('ORD059', 'CUS31', '2025-07-14 10:45:00', NULL,                  'Trực tiếp', TRUE,  35000000, 0,     35000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD060', 'CUS53', '2025-07-15 10:30:00', '2025-07-16 15:00:00', 'Online',    FALSE, 35000000, 40000, 35040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS01',   'SHIP01'),
+('ORD061', 'CUS32', '2025-07-20 11:50:00', '2025-07-21 14:20:00', 'Online',    FALSE, 25000000, 20000, 25020000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP02'),
+('ORD062', 'CUS111','2025-07-25 09:30:00', '2025-07-26 11:00:00', 'Online',    FALSE, 32000000, 50000, 32050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP03'),
+('ORD063', 'CUS54', '2025-07-28 16:30:00', NULL,                  'Trực tiếp', TRUE,  25000000, 0,     25000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE01', NULL),
+('ORD064', 'CUS112','2025-07-29 16:00:00', NULL,                  'Trực tiếp', TRUE,  20000000, 0,     20000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD065', 'CUS136','2025-07-30 16:30:00', NULL,                  'Trực tiếp', TRUE,  62000000, 0,     62000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE01', NULL),
+
+-- THÁNG 08/2025
+('ORD066', 'CUS33', '2025-08-05 09:30:00', '2025-08-06 12:00:00', 'Online',    FALSE, 60000000, 40000, 60040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'OS01',   'SHIP01'),
+('ORD067', 'CUS55', '2025-08-12 11:00:00', '2025-08-13 10:00:00', 'Online',    FALSE, 30000000, 30000, 30030000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP02'),
+('ORD068', 'CUS34', '2025-08-14 10:45:00', NULL,                  'Trực tiếp', TRUE,  40000000, 0,     40000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD069', 'CUS35', '2025-08-20 11:50:00', '2025-08-21 14:20:00', 'Online',    FALSE, 20000000, 20000, 20020000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP02'),
+('ORD070', 'CUS113','2025-08-25 10:00:00', '2025-08-26 14:00:00', 'Online',    FALSE, 35000000, 50000, 35050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS01',   'SHIP01'),
+('ORD071', 'CUS56', '2025-08-25 15:00:00', NULL,                  'Trực tiếp', TRUE,  25000000, 0,     25000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD072', 'CUS137','2025-08-30 09:00:00', '2025-08-31 14:00:00', 'Online',    FALSE, 58000000, 50000, 58050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS02',   'SHIP02'),
+
+-- THÁNG 09/2025
+('ORD073', 'CUS36', '2025-09-05 09:30:00', '2025-09-06 12:00:00', 'Online',    FALSE, 65000000, 40000, 65040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'OS01',   'SHIP01'),
+('ORD074', 'CUS37', '2025-09-14 10:45:00', NULL,                  'Trực tiếp', TRUE,  40000000, 0,     40000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD075', 'CUS57', '2025-09-15 09:00:00', '2025-09-16 14:00:00', 'Online',    FALSE, 38000000, 50000, 38050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS02',   'SHIP03'),
+('ORD076', 'CUS38', '2025-09-20 11:50:00', '2025-09-21 14:20:00', 'Online',    FALSE, 20000000, 20000, 20020000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP02'),
+('ORD077', 'CUS114','2025-09-25 15:00:00', '2025-09-26 10:00:00', 'Online',    FALSE, 30000000, 40000, 30040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP02'),
+('ORD078', 'CUS58', '2025-09-28 16:00:00', NULL,                  'Trực tiếp', TRUE,  22000000, 0,     22000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE01', NULL),
+('ORD079', 'CUS138','2025-09-29 10:30:00', '2025-09-30 09:00:00', 'Online',    FALSE, 60000000, 50000, 60050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP03'),
+
+-- THÁNG 10/2025
+('ORD080', 'CUS39', '2025-10-05 09:30:00', '2025-10-06 12:00:00', 'Online',    FALSE, 50000000, 40000, 50040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'OS01',   'SHIP01'),
+('ORD081', 'CUS59', '2025-10-12 10:00:00', '2025-10-13 11:00:00', 'Online',    FALSE, 32000000, 40000, 32040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS01',   'SHIP01'),
+('ORD082', 'CUS40', '2025-10-14 10:45:00', NULL,                  'Trực tiếp', TRUE,  40000000, 0,     40000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD083', 'CUS41', '2025-10-20 11:50:00', '2025-10-21 14:20:00', 'Online',    FALSE, 20000000, 20000, 20020000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP02'),
+('ORD084', 'CUS115','2025-10-25 09:00:00', '2025-10-26 11:00:00', 'Online',    FALSE, 30000000, 50000, 30050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS02',   'SHIP03'),
+('ORD085', 'CUS60', '2025-10-25 14:00:00', NULL,                  'Trực tiếp', TRUE,  23000000, 0,     23000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD086', 'CUS116','2025-10-28 14:00:00', NULL,                  'Trực tiếp', TRUE,  18000000, 0,     18000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE01', NULL),
+('ORD087', 'CUS139','2025-10-30 14:00:00', '2025-10-30 16:00:00', 'Trực tiếp', TRUE,  55000000, 0,     55000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+
+-- THÁNG 11/2025
+('ORD088', 'CUS42', '2025-11-05 09:30:00', '2025-11-06 12:00:00', 'Online',    FALSE, 55000000, 40000, 55040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'OS01',   'SHIP01'),
+('ORD089', 'CUS43', '2025-11-14 10:45:00', NULL,                  'Trực tiếp', TRUE,  40000000, 0,     40000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD090', 'CUS61', '2025-11-15 11:00:00', '2025-11-16 15:00:00', 'Online',    FALSE, 35000000, 50000, 35050000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS02',   'SHIP02'),
+('ORD091', 'CUS44', '2025-11-20 11:50:00', '2025-11-21 14:20:00', 'Online',    FALSE, 20000000, 20000, 20020000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS02',   'SHIP02'),
+('ORD092', 'CUS117','2025-11-25 10:30:00', '2025-11-26 15:00:00', 'Online',    FALSE, 30000000, 40000, 30040000, 'Hoàn Thành', 'Đã Thanh Toán', 'Thẻ tín dụng', 'OS01',   'SHIP01'),
+('ORD093', 'CUS62', '2025-11-28 16:30:00', NULL,                  'Trực tiếp', TRUE,  25000000, 0,     25000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE01', NULL),
+('ORD094', 'CUS118','2025-11-28 16:30:00', NULL,                  'Trực tiếp', TRUE,  12000000, 0,     12000000, 'Hoàn Thành', 'Đã Thanh Toán', 'Tiền mặt',       'SALE02', NULL),
+('ORD095', 'CUS140','2025-11-29 11:00:00', '2025-11-30 15:00:00', 'Online',    FALSE, 65000000, 60000, 65060000, 'Hoàn Thành', 'Đã Thanh Toán', 'Chuyển khoản',   'OS01',   'SHIP01');
+INSERT INTO order_details (order_id, variant_id, quantity, price_at_order) VALUES
+-- ORD001 (45 Triệu)
+('ORD001','V086_1', 10, 2500000), ('ORD001','V005_1', 20, 1000000),
+
+-- ORD002 (8.2 Triệu)
+('ORD002','V041_1', 2, 2500000), ('ORD002','V042_1', 1, 3200000),
+
+-- ORD003 (62 Triệu)
+('ORD003','V032_2', 50, 850000), ('ORD003','V034_1', 30, 450000), ('ORD003','V026_1', 30, 200000),
+
+-- ORD004 (15 Triệu)
+('ORD004','V059_1', 10, 850000), ('ORD004','V022_1', 10, 650000),
+
+-- ORD005 (25 Triệu)
+('ORD005','V087_1', 5, 3000000), ('ORD005','V060_1', 5, 1200000), ('ORD005','V066_1', 4, 1000000),
+
+-- ORD006 (55 Triệu)
+('ORD006','V042_1', 10, 3200000), ('ORD006','V041_1', 8, 2500000), ('ORD006','V021_1', 1, 3000000),
+
+-- ORD007 (22 Triệu)
+('ORD007','V089_1', 10, 1800000), ('ORD007','V057_1', 8, 500000),
+
+-- ORD008 (48 Triệu)
+('ORD008','V086_1', 10, 2500000), ('ORD008','V087_1', 5, 3000000), ('ORD008','V090_1', 5, 1200000), ('ORD008','V066_1', 2, 1000000),
+
+-- ORD009 (35 Triệu)
+('ORD009','V005_1', 20, 1000000), ('ORD009','V001_1', 20, 500000), ('ORD009','V003_1', 10, 500000),
+
+-- ORD010 (25 Triệu)
+('ORD010','V060_2', 10, 1200000), ('ORD010','V058_1', 20, 400000), ('ORD010','V056_1', 50, 100000),
+
+-- ORD011 (40 Triệu)
+('ORD011','V042_1', 10, 3200000), ('ORD011','V022_1', 10, 650000), ('ORD011','V025_1', 3, 500000),
+
+-- ORD012 (38 Triệu)
+('ORD012','V088_1', 10, 1500000), ('ORD012','V089_1', 10, 1800000), ('ORD012','V021_1', 1, 5000000),
+
+-- ORD013 (32 Triệu)
+('ORD013','V032_2', 20, 850000), ('ORD013','V034_1', 20, 500000), ('ORD013','V035_1', 10, 300000), ('ORD013','V026_1', 10, 200000),
+
+-- ORD014 (28 Triệu)
+('ORD014','V005_1', 15, 850000), ('ORD014','V006_1', 20, 350000), ('ORD014','V056_1', 30, 80000), ('ORD014','V021_1', 10, 550000),
+
+-- ORD015 (22 Triệu)
+('ORD015','V026_1', 50, 180000), ('ORD015','V027_1', 20, 320000), ('ORD015','V032_1', 10, 660000),
+
+-- ORD016 (28 Triệu)
+('ORD016','V006_1', 20, 400000), ('ORD016','V007_1', 20, 500000), ('ORD016','V008_1', 10, 600000), ('ORD016','V018_1', 2, 2000000),
+
+-- ORD017 (25 Triệu - Bù)
+('ORD017','V086_1', 10, 2500000),
+
+-- ORD018 (60 Triệu - Bù)
+('ORD018','V087_1', 20, 3000000),
+
+-- ORD019 (45 Triệu)
+('ORD019','V041_1', 10, 2500000), ('ORD019','V086_1', 8, 2500000),
+
+-- ORD020 (35 Triệu)
+('ORD020','V061_1', 20, 550000), ('ORD020','V052_1', 5, 1500000), ('ORD020','V051_1', 20, 350000), ('ORD020','V046_1', 20, 350000), ('ORD020','V062_1', 7, 350000),
+
+-- ORD021 (55 Triệu)
+('ORD021','V061_1', 50, 600000), ('ORD021','V042_1', 5, 3200000), ('ORD021','V025_1', 10, 500000), ('ORD021','V026_1', 20, 200000),
+
+-- ORD022 (25 Triệu)
+('ORD022','V001_1', 20, 450000), ('ORD022','V002_1', 50, 150000), ('ORD022','V020_1', 20, 350000), ('ORD022','V075_1', 100, 15000),
+
+-- ORD023 (12 Triệu)
+('ORD023','V001_1', 10, 500000), ('ORD023','V016_1', 10, 500000), ('ORD023','V025_1', 4, 500000),
+
+-- ORD024 (32 Triệu - Bù)
+('ORD024','V042_1', 10, 3200000),
+
+-- ORD025 (15 Triệu - Bù)
+('ORD025','V087_1', 5, 3000000),
+
+-- ORD026 (64 Triệu - Bù)
+('ORD026','V042_1', 20, 3200000),
+
+-- ORD027 (65 Triệu)
+('ORD027','V087_1', 15, 3000000), ('ORD027','V086_1', 8, 2500000),
+
+-- ORD028 (30 Triệu)
+('ORD028','V034_1', 30, 450000), ('ORD028','V033_1', 30, 350000), ('ORD028','V031_1', 20, 300000),
+
+-- ORD029 (30 Triệu)
+('ORD029','V005_1', 20, 1000000), ('ORD029','V004_1', 20, 500000),
+
+-- ORD030 (12 Triệu)
+('ORD030','V060_2', 10, 1200000),
+
+-- ORD031 (25 Triệu)
+('ORD031','V076_1', 30, 450000), ('ORD031','V048_1', 20, 450000), ('ORD031','V045_1', 10, 250000),
+
+-- ORD032 (35 Triệu - Bù)
+('ORD032','V086_1', 10, 2500000), ('ORD032','V060_2', 5, 2000000),
+
+-- ORD033 (18 Triệu - Bù)
+('ORD033','V089_1', 10, 1800000),
+
+-- ORD034 (55 Triệu - Bù)
+('ORD034','V086_1', 22, 2500000),
+
+-- ORD035 (55 Triệu)
+('ORD035','V041_1', 10, 2500000), ('ORD035','V042_1', 5, 3200000), ('ORD035','V089_1', 8, 1800000),
+
+-- ORD036 (38 Triệu)
+('ORD036','V060_1', 10, 1200000), ('ORD036','V021_1', 20, 550000), ('ORD036','V022_1', 20, 650000), ('ORD036','V035_1', 10, 200000),
+
+-- ORD037 (40 Triệu)
+('ORD037','V086_1', 16, 2500000),
+
+-- ORD038 (15 Triệu)
+('ORD038','V032_2', 10, 850000), ('ORD038','V034_1', 10, 450000), ('ORD038','V026_1', 10, 200000),
+
+-- ORD039 (27 Triệu)
+('ORD039','V007_1', 20, 450000), ('ORD039','V008_1', 20, 550000), ('ORD039','V023_1', 10, 700000),
+
+-- ORD040 (30 Triệu - Bù)
+('ORD040','V041_1', 12, 2500000),
+
+-- ORD041 (16 Triệu - Bù)
+('ORD041','V042_1', 5, 3200000),
+
+-- ORD042 (58 Triệu - Bù)
+('ORD042','V087_1', 10, 3000000), ('ORD042','V041_1', 11, 2500000),
+
+-- ORD043 (60 Triệu)
+('ORD043','V087_1', 20, 3000000),
+
+-- ORD044 (40 Triệu)
+('ORD044','V042_1', 10, 3200000), ('ORD044','V059_1', 10, 800000),
+
+-- ORD045 (35 Triệu)
+('ORD045','V066_1', 20, 950000), ('ORD045','V069_1', 20, 350000), ('ORD045','V070_1', 20, 250000), ('ORD045','V068_1', 30, 120000),
+
+-- ORD046 (20 Triệu)
+('ORD046','V005_1', 20, 1000000),
+
+-- ORD047 (35 Triệu - Bù)
+('ORD047','V087_1', 10, 3000000), ('ORD047','V025_1', 10, 500000),
+
+-- ORD048 (25 Triệu)
+('ORD048','V081_1', 40, 350000), ('ORD048','V082_1', 30, 250000), ('ORD048','V083_1', 20, 175000),
+
+-- ORD049 (60 Triệu - Bù)
+('ORD049','V086_1', 24, 2500000),
+
+-- ORD050 (55 Triệu)
+('ORD050','V086_1', 22, 2500000),
+
+-- ORD051 (32 Triệu)
+('ORD051','V043_1', 50, 280000), ('ORD051','V037_1', 40, 250000), ('ORD051','V039_1', 40, 150000), ('ORD051','V040_1', 15, 130000),
+
+-- ORD052 (40 Triệu)
+('ORD052','V041_1', 16, 2500000),
+
+-- ORD053 (20 Triệu)
+('ORD053','V060_1', 10, 1200000), ('ORD053','V058_1', 20, 400000),
+
+-- ORD054 (28 Triệu - Bù)
+('ORD054','V086_1', 10, 2500000), ('ORD054','V066_1', 3, 1000000),
+
+-- ORD055 (23 Triệu)
+('ORD055','V059_1', 15, 850000), ('ORD055','V025_1', 20, 450000), ('ORD055','V057_1', 3, 416000),
+
+-- ORD056 (15 Triệu - Bù)
+('ORD056','V089_1', 5, 1800000), ('ORD056','V060_1', 5, 1200000),
+
+-- ORD057 (55 Triệu - Bù)
+('ORD057','V042_1', 15, 3200000), ('ORD057','V060_2', 3, 2333000),
+
+-- ORD058 (45 Triệu)
+('ORD058','V087_1', 15, 3000000),
+
+-- ORD059 (35 Triệu)
+('ORD059','V042_1', 10, 3200000), ('ORD059','V021_1', 1, 3000000),
+
+-- ORD060 (35 Triệu)
+('ORD060','V011_1', 50, 250000), ('ORD060','V012_1', 50, 180000), ('ORD060','V015_1', 100, 90000), ('ORD060','V013_1', 35, 120000),
+
+-- ORD061 (25 Triệu)
+('ORD061','V086_1', 10, 2500000),
+
+-- ORD062 (32 Triệu - Bù)
+('ORD062','V042_1', 10, 3200000),
+
+-- ORD063 (25 Triệu)
+('ORD063','V071_1', 20, 450000), ('ORD063','V072_1', 20, 550000), ('ORD063','V074_1', 20, 150000), ('ORD063','V075_1', 20, 80000),
+
+-- ORD064 (20 Triệu - Bù)
+('ORD064','V005_1', 20, 1000000),
+
+-- ORD065 (62 Triệu - Bù)
+('ORD065','V087_1', 20, 3000000), ('ORD065','V022_1', 4, 500000),
+
+-- ORD066 (60 Triệu)
+('ORD066','V087_1', 20, 3000000),
+
+-- ORD067 (30 Triệu)
+('ORD067','V044_1', 100, 150000), ('ORD067','V045_1', 30, 350000), ('ORD067','V043_1', 16, 280000),
+
+-- ORD068 (40 Triệu)
+('ORD068','V041_1', 16, 2500000),
+
+-- ORD069 (20 Triệu)
+('ORD069','V005_1', 20, 1000000),
+
+-- ORD070 (35 Triệu - Bù)
+('ORD070','V087_1', 10, 3000000), ('ORD070','V022_1', 10, 500000),
+
+-- ORD071 (25 Triệu)
+('ORD071','V018_1', 10, 1200000), ('ORD071','V019_1', 20, 550000), ('ORD071','V075_1', 25, 80000),
+
+-- ORD072 (58 Triệu - Bù)
+('ORD072','V041_1', 23, 2500000), ('ORD072','V026_1', 2, 250000),
+
+-- ORD073 (65 Triệu)
+('ORD073','V086_1', 26, 2500000),
+
+-- ORD074 (40 Triệu)
+('ORD074','V042_1', 12, 3200000), ('ORD074','V026_1', 8, 200000),
+
+-- ORD075 (38 Triệu)
+('ORD075','V032_1', 20, 850000), ('ORD075','V029_1', 30, 380000), ('ORD075','V028_1', 30, 250000), ('ORD075','V030_1', 11, 190000),
+
+-- ORD076 (20 Triệu)
+('ORD076','V060_2', 10, 1200000), ('ORD076','V058_1', 20, 400000),
+
+-- ORD077 (30 Triệu - Bù)
+('ORD077','V086_1', 12, 2500000),
+
+-- ORD078 (22 Triệu)
+('ORD078','V024_1', 40, 300000), ('ORD078','V005_1', 10, 850000), ('ORD078','V022_1', 3, 500000),
+
+-- ORD079 (60 Triệu - Bù)
+('ORD079','V086_1', 24, 2500000),
+
+-- ORD080 (50 Triệu)
+('ORD080','V087_1', 10, 3000000), ('ORD080','V086_1', 8, 2500000),
+
+-- ORD081 (32 Triệu)
+('ORD081','V058_1', 40, 350000), ('ORD081','V057_1', 30, 450000), ('ORD081','V068_1', 37, 120000),
+
+-- ORD082 (40 Triệu)
+('ORD082','V041_1', 16, 2500000),
+
+-- ORD083 (20 Triệu)
+('ORD083','V005_1', 20, 1000000),
+
+-- ORD084 (30 Triệu - Bù)
+('ORD084','V041_1', 12, 2500000),
+
+-- ORD085 (23 Triệu)
+('ORD085','V047_1', 100, 150000), ('ORD085','V046_1', 20, 350000), ('ORD085','V078_1', 3, 333000),
+
+-- ORD086 (18 Triệu - Bù)
+('ORD086','V089_1', 10, 1800000),
+
+-- ORD087 (55 Triệu - Bù)
+('ORD087','V089_1', 20, 1800000), ('ORD087','V032_2', 22, 863636),
+
+-- ORD088 (55 Triệu)
+('ORD088','V086_1', 22, 2500000),
+
+-- ORD089 (40 Triệu)
+('ORD089','V042_1', 12, 3200000), ('ORD089','V026_1', 8, 200000),
+
+-- ORD090 (35 Triệu)
+('ORD090','V088_1', 10, 1500000), ('ORD090','V090_1', 10, 1200000), ('ORD090','V022_1', 10, 650000), ('ORD090','V075_1', 18, 80000),
+
+-- ORD091 (20 Triệu)
+('ORD091','V060_1', 10, 1200000), ('ORD091','V058_1', 20, 400000),
+
+-- ORD092 (30 Triệu - Bù)
+('ORD092','V087_1', 10, 3000000),
+
+-- ORD093 (25 Triệu)
+('ORD093','V065_1', 30, 650000), ('ORD093','V023_1', 5, 850000), ('ORD093','V062_1', 3, 416000),
+
+-- ORD094 (12 Triệu - Bù)
+('ORD094','V060_2', 10, 1200000),
+
+-- ORD095 (65 Triệu - Bù)
+('ORD095','V042_1', 20, 3200000), ('ORD095','V066_1', 1, 1000000);
 
 
 -- ================================================================
@@ -2006,8 +2110,7 @@ SET stock_quantity = (
 
 SET SQL_SAFE_UPDATES = 1;
 SELECT 'Đã hoàn tất cân bằng dữ liệu!' AS Message;
--- 2. Cập nhật dữ liệu tên cho tài khoản OS01 (để đăng nhập không bị lỗi hiển thị)
-DROP TRIGGER IF EXISTS `after_stock_in_update_price`;
+
 SET SQL_SAFE_UPDATES = 1;
 SET FOREIGN_KEY_CHECKS = 1;
 

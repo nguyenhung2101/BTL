@@ -359,7 +359,7 @@ export const OrderCreateScreen = ({ currentUser, setPath }) => {
                     {/* KHÁCH HÀNG */}
                     <div className="p-3 border rounded-lg">
                         <div className="mb-2">
-                            <p className="font-semibold mb-1 text-sm">Mã nhân viên tạo đơn:</p>
+                            <p className="font-semibold mb-1 text-sm">Người tạo đơn:</p>
                             {saleEmployees.length > 0 ? (
                                 <select
                                     value={employeeCode}

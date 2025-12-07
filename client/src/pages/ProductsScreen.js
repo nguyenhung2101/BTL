@@ -222,7 +222,7 @@ export const ProductsScreen = ({ userRoleName }) => {
                             <tr>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Sản phẩm</th>
                                 {/* --- THAY ĐỔI Ở ĐÂY: DANH MỤC -> THƯƠNG HIỆU --- */}
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Thương hiệu</th>
+                                
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Phân loại</th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Giá bán</th>
                                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase">Tổng Tồn</th>
@@ -242,11 +242,6 @@ export const ProductsScreen = ({ userRoleName }) => {
                                             <span className="font-bold text-gray-900 text-sm group-hover:text-blue-700">{item.name}</span>
                                             <span className="px-1.5 py-0.5 rounded-md bg-gray-100 text-gray-600 font-mono text-xs border border-gray-200 mt-1 w-fit">{item.product_id}</span>
                                         </div>
-                                    </td>
-
-                                    {/* --- THAY ĐỔI Ở ĐÂY: HIỂN THỊ BRAND --- */}
-                                    <td className="px-6 py-4 text-sm text-gray-600 font-medium">
-                                        {item.brand || <span className="text-gray-400 italic">--</span>}
                                     </td>
 
                                     {/* Cột 3: Phân loại (Biến thể tóm tắt) */}

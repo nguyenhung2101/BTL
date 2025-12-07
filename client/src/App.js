@@ -29,9 +29,9 @@ import { OrderEditScreen } from './pages/OrderEditScreen';
 // Component Chứa Nội dung chính
 const AppContent = ({ path, setPath, currentUser, userRoleName, onRefreshUser,refreshKey }) => {
     
-    const isAuthorized = useMemo(() => {
-        // --- 2. CẬP NHẬT: Thêm /about và /contact vào danh sách cho phép ---
-        const publicRoutes = ['/shop', '/publicshop', '/login', '/', '/change-password', '/about', '/contact','/profile'];
+const isAuthorized = useMemo(() => {
+        // 1. Các trang công khai (Giữ nguyên)
+        const publicRoutes = ['/shop', '/publicshop', '/login', '/', '/change-password', '/about', '/contact', '/profile'];
         
         if (publicRoutes.includes(path)) return true;
         if (userRoleName === ROLES.OWNER.name) return true;
@@ -39,12 +39,28 @@ const AppContent = ({ path, setPath, currentUser, userRoleName, onRefreshUser,re
         const allowedRoutes = roleToRoutes[userRoleName];
         if (!allowedRoutes) return false; 
         
-        const isAllowed = allowedRoutes.some(route => route.path === path || route.path === '/profile');
+        // --- ĐOẠN ĐÃ SỬA ---
+        const isAllowed = allowedRoutes.some(route => {
+            // Trường hợp 1: Trùng khớp hoàn toàn (VD: vào /orders)
+            if (route.path === path) return true;
+
+            // Trường hợp 2: Là trang con (VD: Cho phép /orders thì vào được /orders/create)
+            // Logic: Đường dẫn hiện tại bắt đầu bằng "route gốc" + dấu "/"
+            if (route.path !== '/' && path.startsWith(route.path + '/')) {
+                return true;
+            }
+
+            // Trường hợp 3: Profile (Giữ lại logic cũ của bạn cho chắc chắn)
+            if (route.path === '/profile') return true;
+
+            return false;
+        });
+        // -------------------
+
         if (isAllowed) return true;
         
         return path === '/unauthorized'; 
     }, [path, userRoleName]);
-
     useEffect(() => {
         if (userRoleName === 'Customer' && path !== '/shop' && path !== '/profile' && path !== '/change-password') {
             setPath('/shop'); return;
