@@ -64,15 +64,29 @@ export default function ProductDetail({ setPath, isLoggedIn, currentUser, produc
     const addToCart = () => {
         if (!product) return;
         const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+        const normalizedSize = (selectedSize || '').trim();
+        const normalizedColor = (selectedColor || '').trim();
         const item = {
             id: product.id,
             name: product.name,
             price: product.price,
             qty: Number(qty) || 1,
-            size: selectedSize || null,
-            color: selectedColor || null
+            size: normalizedSize,
+            color: normalizedColor
         };
-        cart.push(item);
+
+        const existingIndex = cart.findIndex(
+            (it) => it.id === item.id && (it.size || '') === normalizedSize && (it.color || '') === normalizedColor
+        );
+
+        if (existingIndex >= 0) {
+            const existingItem = cart[existingIndex];
+            const mergedQty = (Number(existingItem.qty) || 0) + (Number(item.qty) || 1);
+            cart[existingIndex] = { ...existingItem, ...item, qty: mergedQty };
+        } else {
+            cart.push(item);
+        }
+
         localStorage.setItem('cart', JSON.stringify(cart));
         // Notify other parts of app that cart changed (ShopScreen listens for this)
         try { window.dispatchEvent(new Event('cartUpdated')); } catch (e) {}

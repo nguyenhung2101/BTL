@@ -20,6 +20,12 @@ export const OrdersScreen = ({ setPath, currentUserId, userRoleName }) => {
     const ORDER_STATUSES = ["Đang Xử Lý", "Đang Giao", "Hoàn Thành", "Đã Hủy"];
     const PAYMENT_STATUSES = ["Chưa Thanh Toán", "Đã Thanh Toán", "Đã Hoàn Tiền"];
 
+    const normalizeChannel = (channel) => {
+        const value = (channel || '').toString().toLowerCase();
+        if (value === 'pos' || value === 'trực tiếp' || value === 'truc tiep') return 'Trực tiếp';
+        return 'Online';
+    };
+
     const rolePermissions = {
         'Owner':        { canCreate: true, canEdit: true, canDelete: true, canUpdateStatus: true, canView: true },
         'Sales':        { canCreate: true, canEdit: true, canDelete: false, canUpdateStatus: false, canView: true },
@@ -113,11 +119,13 @@ export const OrdersScreen = ({ setPath, currentUserId, userRoleName }) => {
         }
     };
     
+    const normalizedOrders = useMemo(() => orders.map(o => ({ ...o, channelLabel: normalizeChannel(o.orderChannel) })), [orders]);
+
     const filteredOrders = useMemo(() => {
-        let list = orders;
+        let list = normalizedOrders;
         const query = searchQuery.toLowerCase();
         if (filterChannel !== 'all') {
-            list = list.filter(o => o.orderChannel === filterChannel);
+            list = list.filter(o => o.channelLabel === filterChannel);
         }
         if (query) {
             list = list.filter(o => 
@@ -126,7 +134,7 @@ export const OrdersScreen = ({ setPath, currentUserId, userRoleName }) => {
             );
         }
         return list;
-    }, [orders, searchQuery, filterChannel]);
+    }, [normalizedOrders, searchQuery, filterChannel]);
 
     useEffect(() => {
         fetchOrders();
@@ -225,8 +233,8 @@ export const OrdersScreen = ({ setPath, currentUserId, userRoleName }) => {
                                 <td className="px-6 py-4 text-blue-600 font-semibold">{o.id}</td>
                                 <td className="px-6 py-4">{o.customerName}</td>
                                 <td className="px-6 py-4">{/* Kênh bán */}
-                                    <span className={`px-2 py-1 rounded text-xs font-medium ${o.orderChannel === 'Online' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-200 text-gray-800'}`}>
-                                        {o.orderChannel}
+                                    <span className={`px-2 py-1 rounded text-xs font-medium ${o.channelLabel === 'Online' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-200 text-gray-800'}`}>
+                                        {o.channelLabel}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-sm">{o.orderDate ? new Date(o.orderDate).toLocaleDateString('vi-VN') : 'N/A'}</td>
@@ -310,7 +318,7 @@ export const OrdersScreen = ({ setPath, currentUserId, userRoleName }) => {
 
                             <div className="bg-gray-50 p-4 rounded">
                                 <h4 className="font-semibold mb-2">Thông tin đơn</h4>
-                                <p className="text-sm">Kênh: <span className="font-semibold">{orderDetails.order_channel || orderDetails.orderChannel || 'N/A'}</span></p>
+                                <p className="text-sm">Kênh: <span className="font-semibold">{normalizeChannel(orderDetails.orderChannel)}</span></p>
                                 <p className="text-sm">Ngày đặt: <span className="font-semibold">{orderDetails.orderDate || 'N/A'}</span></p>
                                 <p className="text-sm">Trạng thái đơn: <span className="font-semibold">{orderDetails.status || 'N/A'}</span></p>
                                 <p className="text-sm">Trạng thái thanh toán: <span className="font-semibold">{orderDetails.payment_status || orderDetails.paymentStatus || 'N/A'}</span></p>
@@ -320,7 +328,7 @@ export const OrdersScreen = ({ setPath, currentUserId, userRoleName }) => {
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div className="p-4 bg-white rounded border">
-                                <p className="text-sm text-gray-600">Lương tạm (Subtotal)</p>
+                                <p className="text-sm text-gray-600">Tạm tính (Subtotal)</p>
                                 <p className="font-semibold">{Number(orderDetails.subtotal || orderDetails.subTotal || 0).toLocaleString()} đ</p>
                             </div>
                             <div className="p-4 bg-white rounded border">

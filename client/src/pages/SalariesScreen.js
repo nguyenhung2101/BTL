@@ -146,7 +146,6 @@ export const SalariesScreen = ({ userRoleName }) => {
                         <tbody className="bg-white divide-y divide-gray-200">
                             {filteredSalaries.map((s) => (
                                 <tr key={s.salary_id} className="hover:bg-gray-50">
-                                    {/* Giả định month_year là string 'YYYY-MM-DD' và staff_name được JOIN từ bảng Users */}
                                     <td className="px-6 py-4 whitespace-normal break-words leading-relaxed text-sm font-medium text-gray-900">{(function renderMonth(iso){
                                         if (!iso) return 'N/A';
                                         try {
@@ -169,63 +168,65 @@ export const SalariesScreen = ({ userRoleName }) => {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            {canEdit && (
-                                                <ActionMenu
-                                                    buttonLabel={<span className="text-sm">⋯</span>}
-                                                    items={[
-                                                        {
-                                                            label: 'Đánh dấu đã trả',
-                                                            icon: <DollarSign className="w-4 h-4" />,
-                                                            onClick: async () => {
-                                                                if (!confirm(`Đánh dấu lương #${s.salary_id} là đã trả?`)) return;
-                                                                try {
-                                                                    setIsLoading(true);
-                                                                    if (typeof paySalary === 'function') {
-                                                                        await paySalary(s.salary_id);
-                                                                    } else {
-                                                                        await api.patch(`/salaries/${encodeURIComponent(s.salary_id)}/pay`);
-                                                                    }
-                                                                    await refresh();
-                                                                    alert('Đã cập nhật trạng thái trả lương.');
-                                                                } catch (err) {
-                                                                    console.error(err);
-                                                                    alert((err && err.message) || 'Lỗi khi cập nhật trạng thái trả lương.');
-                                                                } finally {
-                                                                    setIsLoading(false);
-                                                                }
+                                        {canEdit && (
+                                            <>
+                                                <button
+                                                    title="Đánh dấu đã trả"
+                                                    onClick={async () => {
+                                                        if (!window.confirm(`Đánh dấu lương #${s.salary_id} là đã trả?`)) return;
+                                                        try {
+                                                            setIsLoading(true);
+                                                            if (typeof paySalary === 'function') {
+                                                                await paySalary(s.salary_id);
+                                                            } else {
+                                                                await api.patch(`/salaries/${encodeURIComponent(s.salary_id)}/pay`);
                                                             }
-                                                        },
-                                                        {
-                                                            label: 'Sửa chi tiết',
-                                                            icon: <Edit className="w-4 h-4" />, 
-                                                            onClick: () => { setEditingSalary(s); setShowEditModal(true); }
-                                                        },
-                                                        {
-                                                            label: 'Xóa',
-                                                            danger: true,
-                                                            icon: <Trash2 className="w-4 h-4" />, 
-                                                            onClick: async () => {
-                                                                if (!confirm(`Xác nhận xóa bảng lương #${s.salary_id}?`)) return;
-                                                                try {
-                                                                    setIsLoading(true);
-                                                                    if (typeof deleteSalary === 'function') {
-                                                                        await deleteSalary(s.salary_id);
-                                                                    } else {
-                                                                        await api.delete(`/salaries/${encodeURIComponent(s.salary_id)}`);
-                                                                    }
-                                                                    await refresh();
-                                                                    alert('Đã xóa bảng lương.');
-                                                                } catch (err) {
-                                                                    console.error(err);
-                                                                    alert((err && err.message) || 'Lỗi khi xóa bảng lương.');
-                                                                } finally {
-                                                                    setIsLoading(false);
-                                                                }
-                                                            }
+                                                            await refresh();
+                                                            alert('Đã cập nhật trạng thái trả lương.');
+                                                        } catch (err) {
+                                                            console.error(err);
+                                                            alert((err && err.message) || 'Lỗi khi cập nhật trạng thái trả lương.');
+                                                        } finally {
+                                                            setIsLoading(false);
                                                         }
-                                                    ]}
-                                                />
-                                            )}
+                                                    }}
+                                                    className="text-green-600 hover:text-green-900 mr-3 p-1 rounded-full hover:bg-green-100 transition"
+                                                >
+                                                    <DollarSign className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    title="Sửa chi tiết"
+                                                    onClick={() => { setEditingSalary(s); setShowEditModal(true); }}
+                                                    className="text-indigo-600 hover:text-indigo-900 mr-3 p-1 rounded-full hover:bg-indigo-100 transition"
+                                                >
+                                                    <Edit className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    title="Xóa/Hủy"
+                                                    onClick={async () => {
+                                                        if (!window.confirm(`Xác nhận xóa bảng lương #${s.salary_id}?`)) return;
+                                                        try {
+                                                            setIsLoading(true);
+                                                            if (typeof deleteSalary === 'function') {
+                                                                await deleteSalary(s.salary_id);
+                                                            } else {
+                                                                await api.delete(`/salaries/${encodeURIComponent(s.salary_id)}`);
+                                                            }
+                                                            await refresh();
+                                                            alert('Đã xóa bảng lương.');
+                                                        } catch (err) {
+                                                            console.error(err);
+                                                            alert((err && err.message) || 'Lỗi khi xóa bảng lương.');
+                                                        } finally {
+                                                            setIsLoading(false);
+                                                        }
+                                                    }}
+                                                    className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-100 transition"
+                                                >
+                                                    <Trash2 className="w-5 h-5" />
+                                                </button>
+                                            </>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
@@ -233,7 +234,6 @@ export const SalariesScreen = ({ userRoleName }) => {
                     </table>
                     {filteredSalaries.length === 0 && <p className="text-center py-8 text-gray-500">Không tìm thấy bảng lương nào.</p>}
                 </div>
-                {/* Edit modal */}
                 {showEditModal && (
                     <SalaryEditModal
                         visible={showEditModal}

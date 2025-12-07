@@ -26,12 +26,16 @@ const stockInController = {
     // 3. Tạo phiếu nhập mới (Bulk Insert) - [ĐÃ SỬA]
     createStockInReceipt: async (req, res) => {
         try {
-            // [CẬP NHẬT]: Nhận employeeId từ Frontend thay vì userId
+            // Nhận employeeId từ Frontend và cho phép fallback từ token hoặc biến môi trường
             const { stockInId, supplierName, employeeId, items } = req.body;
 
             // --- Validate ---
             if (!items || !Array.isArray(items) || items.length === 0) {
                 return res.status(400).json({ message: 'Danh sách sản phẩm trống.' });
+            }
+            const userId = employeeId || req.user?.userId || process.env.DEFAULT_STOCKIN_USER_ID || 'US201';
+            if (!userId) {
+                return res.status(400).json({ message: 'Vui lòng nhập Mã nhân viên (VD: WH01).' });
             }
             
             // Nếu tạo phiếu mới thì bắt buộc có Nhà cung cấp
@@ -39,16 +43,10 @@ const stockInController = {
                 return res.status(400).json({ message: 'Vui lòng nhập tên nhà cung cấp.' });
             }
 
-            // [FIX] Bắt buộc phải có Mã nhân viên (employeeId)
-            if (!employeeId) {
-                return res.status(400).json({ message: 'Vui lòng nhập Mã nhân viên (VD: WH01).' });
-            }
-
             const result = await stockInModel.createStockInReceipt({
                 stockInId,
                 supplierName,
-                // Truyền employeeId vào field 'userId' để Model xử lý tìm kiếm
-                userId: employeeId, 
+                userId,
                 items
             });
 

@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { Plus, Trash, ArrowLeft, X, Search } from "lucide-react";
-// Giả định bạn đã import các hàm API cần thiết:
-import { createOrder, findCustomerByPhone, getProducts, getCategories, getEmployees } from "../services/api"; 
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { Trash, ArrowLeft, X, Search } from "lucide-react";
+import { createOrder as createOrderApi, findCustomerByPhone, getProducts, getCategories, getEmployees } from "../services/api"; 
 
 // ============================================================
 // COMPONENT CHÍNH: OrderCreateScreen (Cấu trúc POS 2 Cột)
@@ -58,7 +57,7 @@ export const OrderCreateScreen = ({ currentUser, setPath }) => {
     // ============================================================
     // LOGIC TẢI DỮ LIỆU SẢN PHẨM VÀ DANH MỤC (ĐÃ SỬA LỖI TÌM KIẾM)
     // ============================================================
-    const fetchCategoriesAndProducts = async () => {
+    const fetchCategoriesAndProducts = useCallback(async () => {
         setLoadingProducts(true);
         try {
             // 1. Tải danh mục (Nếu cần, để đổ dữ liệu vào ô filter Category)
@@ -78,7 +77,7 @@ export const OrderCreateScreen = ({ currentUser, setPath }) => {
         } finally {
             setLoadingProducts(false);
         }
-    };
+    }, [selectedCategory, searchTerm]);
 
     // Vấn đề 3: Gọi lại API khi Category hoặc Search Term thay đổi
     useEffect(() => {
@@ -88,7 +87,7 @@ export const OrderCreateScreen = ({ currentUser, setPath }) => {
         }, 300); // Đợi 300ms sau khi dừng gõ
 
         return () => clearTimeout(delaySearch);
-    }, [selectedCategory, searchTerm]); 
+    }, [fetchCategoriesAndProducts]); 
 
     // Load employees for delivery selection
     useEffect(() => {
@@ -223,90 +222,44 @@ export const OrderCreateScreen = ({ currentUser, setPath }) => {
 
     const finalTotal = totalItems + shippingFee;
 
-    const handleCreateOrder = async () => {
+    const submitOrder = async () => {
         if (items.length === 0) return setError("Chưa thêm sản phẩm.");
 
         setLoading(true);
         setError(null);
         
-    // Use selected/entered employeeCode, or fallback to currentUser.user_id
-    const employeeId = (employeeCode && employeeCode.trim()) ? employeeCode.trim() : currentUser?.user_id; 
-    if (!employeeId) { 
-        setLoading(false); 
-        return setError("Lỗi: Vui lòng chọn hoặc nhập mã nhân viên. Các mã nhân viên hợp lệ: OS01, SALE1, SALE2, SHIP01, WH01, v.v."); 
-    }
+        const employeeId = (employeeCode && employeeCode.trim()) ? employeeCode.trim() : (currentUser?.user_id || currentUser?.id || currentUser?.userId);
+        if (!employeeId) { setLoading(false); return setError("Lỗi: Vui lòng chọn hoặc nhập mã nhân viên."); }
         
-        if (isOnlineChannel && !customerInfo) {
+        if (isOnlineChannel && !customerInfo && !customerPhone) {
              setLoading(false);
-             return setError("Đơn hàng Online cần phải có thông tin khách hàng (SĐT) để giao hàng.");
+             return setError("Đơn hàng Online cần SĐT khách hàng để giao hàng.");
         }
 
+        const channelCode = salesChannel === 'Trực tiếp' ? 'POS' : 'Online';
+        const pmRaw = (paymentMethod || '').toLowerCase();
+        const paymentCode = pmRaw.includes('thẻ') ? 'CARD' : pmRaw.includes('chuyển') ? 'BANK' : pmRaw.includes('ngân') ? 'BANK' : 'COD';
+
         const payload = {
-            customerId: customerInfo?.customer_id || null,
-            customerPhone: customerInfo?.phone || customerPhone,
-            employeeId: employeeId,
+            customerPhone: customerInfo?.phone || customerPhone || null,
+            employeeId,
             deliveryStaffId: deliveryStaffId || null,
-            orderChannel: salesChannel,
-            directDelivery: salesChannel === 'Trực tiếp', 
-            
+            orderChannel: channelCode,
+            directDelivery: channelCode === 'POS',
             items: items.map((p) => ({
                 variantId: p.variantId,
                 quantity: p.quantity,
-                priceAtOrder: p.price, 
+                priceAtOrder: p.price,
             })),
-            
             subtotal: totalItems,
-            shippingCost: shippingFee, 
+            shippingCost: shippingFee,
             finalTotal: finalTotal,
-            paymentMethod: paymentMethod, 
+            paymentMethod: paymentCode,
         };
 
         try {
-            console.log('[DEBUG] Sending createOrder payload:', JSON.stringify(payload, null, 2));
-            
-            let res;
-            try {
-                res = await createOrder(payload);
-                console.log('[DEBUG] createOrder returned:', res);
-            } catch (apiErr) {
-                console.error('[DEBUG] createOrder threw error:', apiErr);
-                // If API throws, treat it as an error
-                const errorMsg = apiErr?.message || JSON.stringify(apiErr) || 'Lỗi từ server (không xác định)';
-                setError(`Lỗi tạo đơn hàng: ${errorMsg}`);
-                setLoading(false);
-                return;
-            }
-            
-            console.log('[DEBUG] Checking response validity...');
-            console.log('[DEBUG] res type:', typeof res);
-            console.log('[DEBUG] res value:', res);
-            
-            // Handle case where response might be the Axios response object instead of just data
-            if (res && res.data && typeof res.data === 'object' && res.data.orderId) {
-                console.log('[DEBUG] Response appears to be Axios response object, extracting data');
-                res = res.data;
-            }
-            
-            // Check if response is valid
-            if (!res || typeof res !== 'object') {
-                console.error('[ERROR] Response is invalid:', res);
-                setError(`Lỗi: Server trả về dữ liệu không hợp lệ. Dữ liệu: ${JSON.stringify(res)}`);
-                setLoading(false);
-                return;
-            }
-            
-            // Safely extract orderId from response
-            const orderId = res.orderId || res.id;
-            
-            if (!orderId) {
-                console.error('[ERROR] Response missing orderId. Full response:', JSON.stringify(res, null, 2));
-                setError(`Lỗi: Server không trả về mã đơn hàng. Chi tiết: ${JSON.stringify(res)}`);
-                setLoading(false);
-                return;
-            }
-
-            console.log('[DEBUG] Order created successfully with ID:', orderId);
-            alert("Tạo đơn hàng thành công! Mã đơn: " + orderId);
+            const res = await createOrderApi(payload);
+            alert("Tạo đơn hàng thành công! Mã đơn: " + (res.orderId || '')); 
             if (typeof setPath === 'function') {
                 setPath("/orders");
             }
@@ -536,8 +489,8 @@ export const OrderCreateScreen = ({ currentUser, setPath }) => {
 
                 {/* NÚT TẠO ĐƠN */}
                 <button
-                    onClick={handleCreateOrder}
-                    disabled={loading || items.length === 0 || (isOnlineChannel && !customerInfo)}
+                    onClick={submitOrder}
+                    disabled={loading || items.length === 0 || (isOnlineChannel && !customerInfo && !customerPhone)}
                     className="w-full bg-green-600 text-white py-3 rounded-xl text-lg font-bold disabled:opacity-50 hover:bg-green-700 mt-4"
                 >
                     {loading ? "Đang tạo..." : "HOÀN THÀNH ĐƠN HÀNG"}

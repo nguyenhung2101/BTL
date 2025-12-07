@@ -2,6 +2,24 @@
 const db = require('../config/db.config');
 const orderModel = require('../models/orderModel'); 
 
+// Helper: tạo/lấy khách hàng theo SĐT trong cùng transaction
+async function ensureCustomerByPhone(conn, phone, fullName, address) {
+    const [existing] = await conn.query("SELECT customer_id FROM customers WHERE phone = ?", [phone]);
+    if (existing.length > 0) return existing[0].customer_id;
+
+    const [last] = await conn.query(
+        "SELECT customer_id FROM customers WHERE customer_id LIKE 'CUS%' ORDER BY LENGTH(customer_id) DESC, customer_id DESC LIMIT 1"
+    );
+    const nextNum = last.length > 0 ? parseInt(last[0].customer_id.replace('CUS', '')) + 1 : 1;
+    const customerId = `CUS${nextNum}`;
+    const safeName = fullName && fullName.trim() ? fullName.trim() : `Khách lẻ ${phone}`;
+    await conn.query(
+        "INSERT INTO customers (customer_id, full_name, phone, address) VALUES (?, ?, ?, ?)",
+        [customerId, safeName, phone, address || null]
+    );
+    return customerId;
+}
+
 // ===========================
 // TẠO MÃ ĐƠN TỰ ĐỘNG (Helper)
 // ===========================
@@ -44,7 +62,14 @@ const orderController = {
             await conn.beginTransaction();
             
             const { 
-                customerPhone, customerId: customerIdFromClient, employeeId, deliveryStaffId, orderChannel, directDelivery, 
+                customerPhone,
+                customerName,
+                customerAddress,
+                customerId: customerIdFromClient,
+                employeeId,
+                deliveryStaffId,
+                orderChannel,
+                directDelivery, 
                 items, subtotal, shippingCost, finalTotal, paymentMethod 
             } = req.body;
 
@@ -61,14 +86,7 @@ const orderController = {
             if (customerIdFromClient) {
                 customerId = customerIdFromClient;
             } else if (customerPhone) {
-                const [cust] = await conn.query("SELECT customer_id FROM customers WHERE phone = ?", [customerPhone]);
-                if (cust.length === 0) { 
-                    await conn.rollback(); 
-                    return res.status(404).json({ message: "Không tìm thấy khách hàng." }); 
-                }
-                customerId = cust[0].customer_id;
-            } else {
-                customerId = null;
+                customerId = await ensureCustomerByPhone(conn, customerPhone, customerName, customerAddress);
             }
 
             // 2. Xác minh và tính toán
@@ -106,11 +124,18 @@ const orderController = {
 
             const orderId = await generateOrderId(conn);
 
+            // Chuẩn hóa kênh và phương thức thanh toán để tránh lỗi cột ENUM/độ dài
+            const normStr = (v) => (v || '').toString().trim();
+            const safeChannel = normStr(orderChannel).slice(0, 20) || 'Online';
+            const pmRaw = normStr(paymentMethod).toUpperCase();
+            const allowedPM = ['COD', 'CASH', 'CARD', 'BANK', 'BANKING', 'TRANSFER'];
+            const safePayment = allowedPM.includes(pmRaw) ? pmRaw : 'COD';
+
             // 4. INSERT vào orders
             await conn.query(
                 `INSERT INTO orders (order_id, customer_id, staff_id, delivery_staff_id, order_date, subtotal, shipping_cost, final_total, status, order_channel, payment_method, payment_status, direct_delivery, completed_date)
                  VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [orderId, customerId, employeeId, deliveryStaffId || null, subtotal, shippingCost, finalTotal, status, orderChannel, paymentMethod, paymentStatus, directDelivery, completedDate]
+                [orderId, customerId, employeeId, deliveryStaffId || null, subtotal, shippingCost, finalTotal, status, safeChannel, safePayment, paymentStatus, directDelivery, completedDate]
             );
 
             // 5. INSERT vào order_details VÀ TRỪ KHO (Thay thế Trigger)

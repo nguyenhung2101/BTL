@@ -23,11 +23,24 @@ const productController = {
 
         const query = `
             SELECT 
-                p.product_id, p.name, p.category_id, 
-                p.base_price, -- ✅ FIXED: Dùng tên cột chính xác trong DB (bỏ p.price)
-                p.cost_price, 
-                p.is_active,  -- Added to let Frontend know status
-                pv.variant_id, pv.color, pv.size, pv.stock_quantity, pv.additional_price
+                p.product_id,
+                p.name,
+                p.category_id,
+                p.base_price,
+                p.cost_price,
+                p.is_active,
+                p.brand,
+                pv.variant_id,
+                pv.color,
+                pv.size,
+                pv.stock_quantity,
+                pv.additional_price,
+                (
+                    SELECT pi.image_url 
+                    FROM product_images pi 
+                    WHERE pi.product_id = p.product_id 
+                    ORDER BY pi.sort_order ASC LIMIT 1
+                ) AS image_url
             FROM products p
             LEFT JOIN product_variants pv ON p.product_id = pv.product_id
             WHERE ${filterConditions}
@@ -40,17 +53,18 @@ const productController = {
             // CONVERT FLAT DATA TO NESTED STRUCTURE
             const productsMap = {};
             rows.forEach(row => {
-                const { product_id, name, base_price, cost_price, is_active, brand, category_id, ...variant } = row; 
+                const { product_id, name, base_price, cost_price, is_active, brand, category_id, image_url, ...variant } = row; 
                 
                 if (!productsMap[product_id]) {
                     productsMap[product_id] = {
-                        product_id, 
-                        name, 
-                        base_price, 
+                        product_id,
+                        name,
+                        base_price,
                         cost_price,
-                        is_active, 
+                        is_active,
                         brand,
                         category_id,
+                        image_url,
                         variants: []
                     };
                 }

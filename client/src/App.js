@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
 // Import các màn hình và component
 import { ROLES, roleToRoutes } from './utils/constants';
@@ -25,6 +25,7 @@ import ProductDetail from "./pages/ProductDetail";
 import { ProfileScreen } from './pages/ProfileScreen';
 import { OrderCreateScreen } from './pages/OrderCreateScreen';
 import { OrderEditScreen } from './pages/OrderEditScreen';
+import CheckoutScreen from './pages/CheckoutScreen';
 
 // Component Chứa Nội dung chính
 const AppContent = ({ path, setPath, currentUser, userRoleName, onRefreshUser,refreshKey }) => {
@@ -99,21 +100,19 @@ const isAuthorized = useMemo(() => {
         // Cần thêm các case cho các route con!
         
         // --- BỔ SUNG: Xử lý các route con của Đơn hàng ---
-        if (path.startsWith('/orders/create')) {
-             // Giả định bạn đã import OrderCreateScreen
-             // Import OrderCreateScreen ở đầu file: import { OrderCreateScreen } from './pages/OrderCreateScreen';
-             // Nếu OrderCreateScreen có trong file của bạn (bạn chưa gửi toàn bộ imports), bạn cần thêm nó vào:
-             return <OrderCreateScreen currentUser={currentUser} setPath={setPath} />;
-        }
-        if (path.startsWith('/orders/')) {
-             const parts = path.split('/');
-             const orderId = parts[2]; // /orders/{id}/edit
-             if (parts.length === 4 && parts[3] === 'edit') {
-                 // Giả định bạn có OrderEditScreen
-                 // import { OrderEditScreen } from './pages/OrderEditScreen';
-                 return <OrderEditScreen orderId={orderId} currentUser={currentUser} setPath={setPath} />;
-             }
-        }
+           if (path.startsWith('/orders/create')) {
+               return <OrderCreateScreen currentUser={currentUser} setPath={setPath} />;
+           }
+           if (path.startsWith('/orders/')) {
+               const parts = path.split('/');
+               const orderId = parts[2]; // /orders/{id}/edit
+               if (parts.length === 4 && parts[3] === 'edit') {
+                  return <OrderEditScreen orderId={orderId} currentUser={currentUser} setPath={setPath} />;
+               }
+           }
+           if (path === '/checkout') {
+               return <CheckoutScreen setPath={setPath} isLoggedIn={!!currentUser} currentUser={currentUser} />;
+           }
     }
 };
 
@@ -121,13 +120,30 @@ export default function App() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
     const [userRoleName, setUserRoleName] = useState(null);
-    const [path, setPath] = useState('/'); 
+    const [path, setPathState] = useState('/'); 
     const [isCheckingAuth, setIsCheckingAuth] = useState(true);
     const [refreshKey, setRefreshKey] = useState(0);
 
-    // --- LOGIC MỚI: KHỞI TẠO TRẠNG THÁI NGƯỜI DÙNG TỪ LOCALSTORAGE ---
+    // Hàm điều hướng ghi vào history để hỗ trợ Back/Forward
+    const navigate = useCallback((newPath, { replace = false } = {}) => {
+        if (!newPath) return;
+        const url = newPath.startsWith('/') ? newPath : `/${newPath}`;
+        if (replace) {
+            window.history.replaceState({ path: url }, '', url);
+        } else {
+            window.history.pushState({ path: url }, '', url);
+        }
+        setPathState(url);
+    }, []);
+
+    // Cho phép dùng setPath như trước nhưng có ghi history
+    const setPath = navigate;
+
+    // Khởi tạo path theo URL hiện tại, lắng nghe Back/Forward, đồng thời phục hồi user từ localStorage
     useEffect(() => {
-        // Khi app khởi động, cố gắng load user từ localStorage để giữ session (nếu có)
+        const initialPath = window.location.pathname || '/';
+        setPathState(initialPath);
+
         try {
             const storedUser = localStorage.getItem('user');
             if (storedUser) {
@@ -136,7 +152,6 @@ export default function App() {
                 setUserRoleName(parsed.roleName || parsed.role_name || null);
                 setIsLoggedIn(true);
             } else {
-                // Không có user lưu sẵn -> ở trạng thái chưa đăng nhập
                 setIsLoggedIn(false);
             }
         } catch (err) {
@@ -145,7 +160,14 @@ export default function App() {
         } finally {
             setIsCheckingAuth(false);
         }
-    }, []); 
+
+        const onPopState = (e) => {
+            const nextPath = (e.state && e.state.path) || window.location.pathname || '/';
+            setPathState(nextPath);
+        };
+        window.addEventListener('popstate', onPopState);
+        return () => window.removeEventListener('popstate', onPopState);
+    }, []);
 
     const handleLogout = () => {
         localStorage.clear();
@@ -232,6 +254,11 @@ export default function App() {
                 onLogout={handleLogout}
             />
         );
+    }
+
+    if (path === '/checkout') {
+        if (!isLoggedIn) { setPath('/login'); return null; }
+        return <CheckoutScreen setPath={setPath} isLoggedIn={isLoggedIn} currentUser={currentUser} />;
     }
 
     // Shop
